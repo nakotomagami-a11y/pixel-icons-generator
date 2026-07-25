@@ -70,6 +70,7 @@ class MockCtx {
 const specs: { cls: IconClass; n: number }[] = [
   { cls: "blades", n: COLS },
   { cls: "spears", n: COLS },
+  { cls: "axes", n: COLS },
 ];
 
 const cell = DIM * SCALE + PAD;

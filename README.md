@@ -2,7 +2,9 @@
 
 Procedural pixel-art **weapon icons**, drawn on a plain 2D canvas — no image assets, no AI.
 
-Two generators — **blades** and **spears** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, hafts, and round ornaments). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
+Three generators — **blades**, **spears**, and **axes** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, hafts, round ornaments, and flared axe bits). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
+
+> `blades` and `spears` are ports of Brian MacIntosh's Icon Machine; `axes` is an original generator added in this project (haft + procedural axe head).
 
 ![Generated blades and spears](assets/preview.png)
 
@@ -12,7 +14,7 @@ Two generators — **blades** and **spears** — each built from traditional pro
 
 - **Pure canvas 2D** — no WebGL, no Three.js, no sprite sheets
 - **Deterministic** — same `seed` + class → same icon everywhere; safe to store in a database
-- **Two generators** — `blades`, `spears`, plus meta-selectors `anyweapon` and `any`
+- **Three generators** — `blades`, `spears`, `axes`, plus meta-selectors `anyweapon` and `any`
 - **Pixel-perfect** — renders at a native resolution (default 32×32) and scales up with `image-rendering: pixelated`
 - **React component included** — `<WeaponIcon>` with zero configuration; framework-agnostic core if you don't use React
 - **Tree-shakeable** — generator core, React component, and math utilities are separate exports
@@ -65,13 +67,13 @@ The only value you need to persist.
 interface IconConfig {
   /** String seed. Drives every procedural choice. */
   seed: string;
-  /** "blades" | "spears" | "any" | "anyweapon" */
+  /** "blades" | "spears" | "axes" | "any" | "anyweapon" */
   iconClass: IconClassSelector;
 }
 ```
 
-- `blades` / `spears` — draw that specific category.
-- `anyweapon` / `any` — deterministically pick `blades` or `spears` from the seed.
+- `blades` / `spears` / `axes` — draw that specific category.
+- `anyweapon` / `any` — deterministically pick one of `blades` / `spears` / `axes` from the seed.
 
 ---
 
