@@ -20,6 +20,15 @@ import { Rng, sfc32, xmur3 } from "./rng";
 /** Subset of CanvasRenderingContext2D the generator relies on. */
 export type Ctx2D = CanvasRenderingContext2D;
 
+export interface IconOptions {
+  /**
+   * Outline color as [r, g, b], 0–255. The original uses pure black
+   * ([0, 0, 0]); a dark desaturated tone (e.g. [26, 22, 34]) reads softer and
+   * matches hand-drawn pixel-art outlines. Default: black.
+   */
+  border?: [number, number, number];
+}
+
 const ALL_CLASSES: IconClass[] = ["blades", "spears"];
 
 export class IconGenerator {
@@ -27,10 +36,12 @@ export class IconGenerator {
   private dimension: number;
   private rng = new Rng();
   private translation = new Vector(0, 0);
+  private border: [number, number, number];
 
-  constructor(ctx: Ctx2D, dimension: number) {
+  constructor(ctx: Ctx2D, dimension: number, options: IconOptions = {}) {
     this.ctx = ctx;
     this.dimension = dimension;
+    this.border = options.border ?? [0, 0, 0];
   }
 
   /** Draw the configured icon into the context (at the current translation). */
@@ -95,9 +106,9 @@ export class IconGenerator {
             (y > 0 && readData.data[ny + 3]! > 0) ||
             (y < height - 1 && readData.data[py + 3]! > 0)
           ) {
-            mutableData.data[pixelStart + 0] = 0;
-            mutableData.data[pixelStart + 1] = 0;
-            mutableData.data[pixelStart + 2] = 0;
+            mutableData.data[pixelStart + 0] = this.border[0];
+            mutableData.data[pixelStart + 1] = this.border[1];
+            mutableData.data[pixelStart + 2] = this.border[2];
             mutableData.data[pixelStart + 3] = 255;
           }
         }
@@ -648,6 +659,11 @@ interface OrnamentParams {
  * Returns the concrete class that was drawn (useful when `iconClass` was a
  * meta-selector like "anyweapon").
  */
-export function generateIcon(ctx: Ctx2D, dimension: number, config: IconConfig): IconClass {
-  return new IconGenerator(ctx, dimension).generate(config);
+export function generateIcon(
+  ctx: Ctx2D,
+  dimension: number,
+  config: IconConfig,
+  options?: IconOptions,
+): IconClass {
+  return new IconGenerator(ctx, dimension, options).generate(config);
 }
