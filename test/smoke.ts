@@ -102,7 +102,7 @@ class MockCtx {
   }
 }
 
-const classes: IconClass[] = ["potions", "blades", "spears"];
+const classes: IconClass[] = ["blades", "spears"];
 let ok = true;
 for (const iconClass of classes) {
   // multiple seeds to exercise different random branches

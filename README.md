@@ -1,10 +1,10 @@
 # pixel-icons
 
-Procedural pixel-art **weapon and potion icons**, drawn on a plain 2D canvas — no image assets, no AI.
+Procedural pixel-art **weapon icons**, drawn on a plain 2D canvas — no image assets, no AI.
 
-Three generators — **blades**, **spears**, and **potions** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, contoured bottles with fluid and glass reflections). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
+Two generators — **blades** and **spears** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, hafts, and round ornaments). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
 
-![Generated blades, spears, and potions](assets/preview.png)
+![Generated blades and spears](assets/preview.png)
 
 ---
 
@@ -12,7 +12,7 @@ Three generators — **blades**, **spears**, and **potions** — each built from
 
 - **Pure canvas 2D** — no WebGL, no Three.js, no sprite sheets
 - **Deterministic** — same `seed` + class → same icon everywhere; safe to store in a database
-- **Three generators** — `blades`, `spears`, `potions`, plus meta-selectors `anyweapon` and `any`
+- **Two generators** — `blades`, `spears`, plus meta-selectors `anyweapon` and `any`
 - **Pixel-perfect** — renders at a native resolution (default 32×32) and scales up with `image-rendering: pixelated`
 - **React component included** — `<WeaponIcon>` with zero configuration; framework-agnostic core if you don't use React
 - **Tree-shakeable** — generator core, React component, and math utilities are separate exports
@@ -65,14 +65,13 @@ The only value you need to persist.
 interface IconConfig {
   /** String seed. Drives every procedural choice. */
   seed: string;
-  /** "potions" | "blades" | "spears" | "any" | "anyweapon" */
+  /** "blades" | "spears" | "any" | "anyweapon" */
   iconClass: IconClassSelector;
 }
 ```
 
-- `blades` / `spears` / `potions` — draw that specific category.
-- `anyweapon` — deterministically pick `blades` or `spears` from the seed.
-- `any` — deterministically pick any of the three from the seed.
+- `blades` / `spears` — draw that specific category.
+- `anyweapon` / `any` — deterministically pick `blades` or `spears` from the seed.
 
 ---
 
@@ -105,7 +104,7 @@ Generate a random `IconConfig` using `Math.random()` — for "reroll" buttons, n
 
 ## Credits
 
-This is a TypeScript port of [**Icon Machine**](https://github.com/BrianMacIntosh/icon-machine) by [**Brian MacIntosh**](https://www.brianmacintosh.com/), originally written in JavaScript. All of the procedural drawing algorithms — blade cores, crossguards, grips, hafts, round ornaments, and potion contours — are his work. This package translates that logic to standalone TypeScript with the DOM/UI stripped out, so it can be embedded as a library.
+This is a TypeScript port of [**Icon Machine**](https://github.com/BrianMacIntosh/icon-machine) by [**Brian MacIntosh**](https://www.brianmacintosh.com/), originally written in JavaScript. All of the procedural drawing algorithms — blade cores, crossguards, grips, hafts, and round ornaments — are his work. (His original also generates potions; only the weapon generators are ported here.) This package translates that logic to standalone TypeScript with the DOM/UI stripped out, so it can be embedded as a library.
 
 Please support and credit the original author.
 

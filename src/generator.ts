@@ -1,6 +1,9 @@
 /**
  * IconGenerator — faithful TypeScript port of Brian MacIntosh's Icon Machine
- * procedural pixel-art generator (potions, blades, spears).
+ * procedural pixel-art weapon generator (blades, spears).
+ *
+ * The original also generates potions; that generator was dropped in this
+ * build — only the weapon generators are ported.
  *
  * The original was a single `RandomArt` object bound to the page DOM. This
  * strips the UI: construct with a 2D canvas context + a square dimension, then
@@ -17,7 +20,7 @@ import { Rng, sfc32, xmur3 } from "./rng";
 /** Subset of CanvasRenderingContext2D the generator relies on. */
 export type Ctx2D = CanvasRenderingContext2D;
 
-const ALL_CLASSES: IconClass[] = ["potions", "blades", "spears"];
+const ALL_CLASSES: IconClass[] = ["blades", "spears"];
 
 export class IconGenerator {
   private ctx: Ctx2D;
@@ -40,19 +43,14 @@ export class IconGenerator {
 
     let drawClass: IconClass;
     const sel: IconClassSelector = config.iconClass;
-    if (sel === "any") {
+    if (sel === "any" || sel === "anyweapon") {
       drawClass = ALL_CLASSES[Math.floor(ALL_CLASSES.length * metaRandom())]!;
-    } else if (sel === "anyweapon") {
-      drawClass = ALL_CLASSES[1 + Math.floor((ALL_CLASSES.length - 1) * metaRandom())]!;
     } else {
       drawClass = sel;
     }
 
     this.rng.seed(seed);
     switch (drawClass) {
-      case "potions":
-        this.drawRandomPotion();
-        break;
       case "blades":
         this.drawRandomBlade();
         break;
@@ -106,167 +104,6 @@ export class IconGenerator {
       }
     }
     this.ctx.putImageData(mutableData, ox, oy);
-  }
-
-  // -- potion ----------------------------------------------------------------
-
-  private drawRandomPotion(): void {
-    this.rng.checkpoint();
-    const r = this.rng;
-
-    const width = this.dimension;
-    const height = this.dimension;
-    const dscale = height / 32;
-    const centerXL = width / 2 - 1;
-
-    this.clearCanvas();
-
-    const lipHeight = Math.ceil(r.range(2, 5) * dscale);
-    const stopperTopHeight = Math.ceil(r.range(2, 5) * dscale);
-    const stopperDepth = r.range(lipHeight + 1, lipHeight + Math.round(4 * dscale));
-    const stopperWidth = Math.ceil(r.range(2, 6) * dscale) * 2;
-    const neckWidth = stopperWidth + 2;
-    const lipWidth = neckWidth + Math.ceil(r.range(2, 4) * dscale) * 2;
-    const stopperTopWidth = Math.min(stopperWidth + 2, lipWidth - 2);
-    const stopperTop = 2;
-    const lipTop = stopperTop + stopperTopHeight;
-    const neckTop = lipTop + lipHeight;
-    const bottleBottom = height - 2;
-    const fluidTop = neckTop + r.range(height / 8, (bottleBottom - neckTop) * 0.6);
-    const contourInterval = Math.round(4 * dscale);
-
-    const stopperLight: Color = { r: 222, g: 152, b: 100 };
-    const stopperDark: Color = { r: 118, g: 49, b: 0 };
-    const innerBorderLight: Color = { r: 213, g: 226, b: 239 };
-    const innerBorderDark: Color = { r: 181, g: 196, b: 197 };
-    const glassLight: Color = { r: 227, g: 244, b: 248, a: 165 / 255 };
-    const glassDark: Color = { r: 163, g: 187, b: 199, a: 165 / 255 };
-
-    const fluidColor = r.color();
-    const fluidColor2 = r.randomize(fluidColor, 300);
-
-    // shape of neck/body
-    const contour: number[] = [];
-    contour[neckTop] = neckWidth / 2;
-    let velocity = 0;
-    let acceleration = 0;
-    let direction = 1;
-    const bodyTop = neckTop + 1;
-    for (let b = bodyTop; b <= bottleBottom; b++) {
-      const d = Math.floor(velocity);
-      velocity += acceleration;
-      contour[b] = Math.max(neckWidth / 2, Math.min(width / 2 - 2, contour[b - 1]! + d));
-      if (b % contourInterval === 0 && r.float() <= 0.5) {
-        acceleration = (direction * r.range(0, 5)) / 2;
-        direction = -direction;
-      }
-    }
-
-    // outer stopper
-    const stopperLeft = centerXL - stopperTopWidth / 2 + 1;
-    for (let x = 0; x < stopperTopWidth; x++) {
-      const n = x / (stopperTopWidth - 1) - 0.5;
-      this.ctx.fillStyle = colorStr(colorLerp(stopperLight, stopperDark, n));
-      this.ctx.fillRect(x + stopperLeft, stopperTop, 1, stopperTopHeight);
-    }
-
-    // body
-    let previousContour = lipWidth;
-    for (let y = neckTop; y < contour.length; y++) {
-      const contourWidth = contour[y]! * 2;
-
-      if (y >= fluidTop) {
-        const vn = (y - fluidTop) / (bottleBottom - fluidTop);
-        const left = centerXL - contourWidth / 2;
-        for (let x = 1; x < contourWidth; x++) {
-          const n = x / (contourWidth - 1) - (0.5 + r.float() * 0.1);
-          this.ctx.fillStyle = colorStr(
-            colorLerp(
-              colorLerp(fluidColor, fluidColor2, vn),
-              colorLerp(colorDarken(fluidColor, 1), colorDarken(fluidColor2, 1), vn),
-              n,
-            ),
-          );
-          this.drawPixel(left + x, y);
-        }
-      }
-
-      if (y >= neckTop && y <= fluidTop) {
-        const left = centerXL - contourWidth / 2;
-        for (let x = 1; x < contourWidth; x++) {
-          const n = x / (contourWidth - 1);
-          this.ctx.fillStyle = colorStr(colorLerp(glassLight, glassDark, n));
-          this.drawPixel(left + x, y);
-        }
-      }
-
-      if (contourWidth === previousContour) {
-        this.ctx.fillStyle = colorStr(innerBorderLight);
-        this.drawPixel(centerXL - contourWidth / 2 + 1, y);
-        this.ctx.fillStyle = colorStr(innerBorderDark);
-        this.drawPixel(centerXL + contourWidth / 2, y);
-      } else {
-        const yInner = previousContour < contourWidth ? y : y - 1;
-        const minContour = Math.min(contourWidth, previousContour);
-        const lineWidth = Math.abs(previousContour - contourWidth) / 2;
-        this.ctx.fillStyle = colorStr(innerBorderLight);
-        this.ctx.fillRect(centerXL - minContour / 2 - lineWidth + 1, yInner, lineWidth, 1);
-        this.drawPixel(centerXL - contourWidth / 2 + 1, y);
-        this.ctx.fillStyle = colorStr(innerBorderDark);
-        this.ctx.fillRect(centerXL + minContour / 2 + 1, yInner, lineWidth, 1);
-        this.drawPixel(centerXL + contourWidth / 2, y);
-      }
-
-      previousContour = contourWidth;
-    }
-
-    // top-left reflection overlay
-    previousContour = lipWidth;
-    for (let y = neckTop; y < contour.length; y++) {
-      const contourWidth = contour[y]! * 2;
-      if (previousContour < contourWidth) {
-        const reflectWidth = Math.max(1, contourWidth - previousContour);
-        const crunch = 1 - (0.3 * contourWidth) / width;
-        const reflectOffset = Math.round((2 - contourWidth / 2) * crunch);
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = "soft-light";
-        this.ctx.fillStyle = "white";
-        this.ctx.fillRect(centerXL + reflectOffset, y + 2, reflectWidth * crunch, 1);
-        this.ctx.restore();
-      }
-      previousContour = contourWidth;
-    }
-
-    // inner stopper
-    const stopperInnerLeft = centerXL - stopperWidth / 2 + 1;
-    for (let x = 0; x < stopperWidth; x++) {
-      const n = x / (stopperWidth - 1) - 0.5;
-      this.ctx.fillStyle = colorStr(colorLerp(stopperLight, stopperDark, n));
-      this.ctx.fillRect(x + stopperInnerLeft, lipTop, 1, stopperDepth);
-    }
-
-    // lip
-    const lipLeft = centerXL - lipWidth / 2 + 1;
-    this.ctx.fillStyle = colorStr(innerBorderLight);
-    this.ctx.fillRect(lipLeft, lipTop, 1, lipHeight);
-    this.ctx.fillStyle = colorStr(innerBorderDark);
-    this.ctx.fillRect(lipLeft + lipWidth - 1, lipTop, 1, lipHeight);
-    for (let x = 1; x < lipWidth - 1; x++) {
-      const n = (x - 1) / (lipWidth - 3) - 0.5;
-      this.ctx.fillStyle = colorStr(colorLerp(glassLight, glassDark, n));
-      this.ctx.fillRect(x + lipLeft, lipTop, 1, lipHeight);
-    }
-
-    // bottom border
-    const borderLeft = centerXL - contour[bottleBottom]! + 1;
-    const borderWidth = contour[bottleBottom]! * 2;
-    for (let x = 0; x < borderWidth; x++) {
-      const n = x / (borderWidth - 1) - 0.5;
-      this.ctx.fillStyle = colorStr(colorLerp(innerBorderLight, innerBorderDark, n));
-      this.drawPixel(borderLeft + x, bottleBottom);
-    }
-
-    this.addBorder();
   }
 
   // -- blade -----------------------------------------------------------------

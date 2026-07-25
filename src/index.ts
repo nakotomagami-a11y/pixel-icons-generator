@@ -1,5 +1,5 @@
 /**
- * pixel-icons — procedural pixel-art weapon & potion icon generator.
+ * pixel-icons — procedural pixel-art weapon icon generator.
  *
  * TypeScript port of Icon Machine by Brian MacIntosh (GPL-3.0).
  * See README for attribution and licensing.
