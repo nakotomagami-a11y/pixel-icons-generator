@@ -1,0 +1,1 @@
+export { WeaponIcon } from "./WeaponIcon";

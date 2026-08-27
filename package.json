@@ -33,7 +33,6 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "prepare": "npm run build",
     "typecheck": "tsc --noEmit",
     "preview": "bun scripts/preview.mjs"
   },
