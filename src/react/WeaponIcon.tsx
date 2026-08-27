@@ -14,6 +14,7 @@
  */
 import { memo, useEffect, useRef } from "react";
 import type { IconConfig } from "../types";
+import type { ParticleType } from "../particles";
 import { IconGenerator } from "../generator";
 
 export interface WeaponIconProps {
@@ -22,8 +23,12 @@ export interface WeaponIconProps {
   /** Display size in CSS pixels. @default 48 */
   size?: number;
   /**
-   * Native render resolution in pixels. Higher = smoother edges / finer detail
-   * (48 is a good balance; ≥96 can distort the composition). @default 48
+   * Native render resolution in pixels. Lower = chunkier, more deliberate
+   * pixels — which is what makes the tiny-swords pack read clean: a fixed low
+   * native res with big blocks, not fine-grained detail. Omit to derive a
+   * pack-like value from `size` (≈0.55×, clamped to 28–44); high resolutions
+   * only amplify the procedural edge noise and look rough. Pass an explicit
+   * value to override.
    */
   dimension?: number;
   /**
@@ -31,6 +36,13 @@ export interface WeaponIconProps {
    * desaturated tone (e.g. [26, 22, 34]) reads softer against dark UIs.
    */
   border?: [number, number, number];
+  /**
+   * Particle FX aura over the icon: a {@link ParticleType}, "random" (seeded),
+   * "themed" (matched to the weapon's colour), or omit for none. Ten types
+   * (sparkle/ember/frost/spark/mote/leaf/bubble/blood/holy/ash), each hugging the
+   * weapon so it reads as belonging to it.
+   */
+  particles?: ParticleType | "random" | "themed" | "none";
   /** Forwarded to the canvas element. */
   className?: string;
 }
@@ -38,26 +50,33 @@ export interface WeaponIconProps {
 export const WeaponIcon = memo(function WeaponIcon({
   config,
   size = 48,
-  dimension = 48,
+  dimension,
   border,
+  particles,
   className,
 }: WeaponIconProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Chunky-by-design: a fixed-ish low native res (28–44) upscaled to the display
+  // size gives the tiny-swords pack's deliberate blocky edges. Supersampling to
+  // 48–96 (the old default) rendered fine pixels that just amplified the
+  // procedural edge noise and read as rough. The generator is scale-invariant,
+  // so a lower native res only coarsens the pixels — it never reshapes the icon.
+  const nativeDim = dimension ?? Math.min(60, Math.max(40, Math.round(size * 0.7)));
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, dimension, dimension);
-    new IconGenerator(ctx, dimension, { border }).generate(config);
-  }, [config, dimension, border]);
+    ctx.clearRect(0, 0, nativeDim, nativeDim);
+    new IconGenerator(ctx, nativeDim, { border, particles }).generate(config);
+  }, [config, nativeDim, border, particles]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={dimension}
-      height={dimension}
+      width={nativeDim}
+      height={nativeDim}
       className={className}
       style={{
         width: size,

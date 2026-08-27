@@ -12,15 +12,15 @@ export interface Color {
 
 /**
  * A concrete icon category. Each maps to a distinct procedural generator.
- * All are weapons.
+ * All are weapons or shields.
  */
-export type IconClass = "blades" | "spears" | "axes";
+export type IconClass = "blades" | "spears" | "axes" | "staffs" | "tridents" | "shields";
 
 /**
  * What to generate. In addition to the concrete classes, two meta-values
  * resolve to a concrete class deterministically from the seed. Both currently
- * pick from the weapon set (`blades | spears`); `any` and `anyweapon` are kept
- * as distinct names for API stability.
+ * pick from the full class set; `any` and `anyweapon` are kept as distinct
+ * names for API stability.
  */
 export type IconClassSelector = IconClass | "any" | "anyweapon";
 

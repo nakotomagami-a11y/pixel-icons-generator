@@ -26,8 +26,28 @@ export function hsvToRgb(color: Hsv): Color {
   return out;
 }
 
+/**
+ * Cel-shading: number of discrete value steps every {@link colorLerp} blend is
+ * snapped to. This is what gives the tiny-swords look — hard shadow/highlight
+ * bands instead of smooth airbrush gradients. 0 or 1 disables (continuous).
+ * Set once per render from the generator; canvas drawing is synchronous so a
+ * module-level knob is safe.
+ */
+let celSteps = 0;
+
+/** Configure cel-shading step count for subsequent {@link colorLerp} calls. */
+export function setCelSteps(n: number): void {
+  celSteps = Number.isFinite(n) && n > 1 ? Math.floor(n) : 0;
+}
+
+/** Snap a 0..1 blend factor to the nearest cel band (no-op when disabled). */
+export function quantize(t: number): number {
+  if (celSteps <= 1) return t;
+  return Math.round(t * (celSteps - 1)) / (celSteps - 1);
+}
+
 export function colorLerp(a: Color, b: Color, t: number): Color {
-  t = Math.max(0, Math.min(1, t));
+  t = quantize(Math.max(0, Math.min(1, t)));
   const aa = a.a ?? 1;
   const ba = b.a ?? 1;
   return {

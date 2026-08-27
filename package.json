@@ -1,8 +1,8 @@
 {
   "name": "pixel-icons",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Procedural pixel-art weapon & potion icon generator on canvas 2D. TypeScript port of Icon Machine by Brian MacIntosh.",
+  "description": "Procedural pixel-art weapon & shield icon generator on canvas 2D. TypeScript port of Icon Machine by Brian MacIntosh.",
   "author": "Parlamentas",
   "license": "GPL-3.0-or-later",
   "repository": {
@@ -10,7 +10,16 @@
     "url": "https://github.com/nakotomagami-a11y/pixel-icons-generator.git"
   },
   "homepage": "https://github.com/nakotomagami-a11y/pixel-icons-generator#readme",
-  "keywords": ["pixel-art", "icons", "weapons", "potions", "procedural", "canvas", "react", "generator"],
+  "keywords": [
+    "pixel-art",
+    "icons",
+    "weapons",
+    "shields",
+    "procedural",
+    "canvas",
+    "react",
+    "generator"
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./types": "./src/types.ts",
@@ -19,15 +28,19 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "preview": "bun scripts/preview.mjs"
   },
   "peerDependencies": {
     "react": ">=18.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.2",
     "@types/react": "^19.0.0",
     "typescript": "^5.6.3"
   }

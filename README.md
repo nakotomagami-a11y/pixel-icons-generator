@@ -1,10 +1,10 @@
 # pixel-icons
 
-Procedural pixel-art **weapon icons**, drawn on a plain 2D canvas — no image assets, no AI.
+Procedural pixel-art **weapon & shield icons**, drawn on a plain 2D canvas — no image assets, no AI.
 
-Three generators — **blades**, **spears**, and **axes** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, hafts, round ornaments, and flared axe bits). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
+Six generators — **blades**, **spears**, **axes**, **staffs**, **tridents**, and **shields** — each built from traditional procedural algorithms (curved blade cores, tapered crossguards, wound grips, hafts, round ornaments, flared axe bits, gem-topped staff heads, and shield bodies with heraldic blazons). Every icon is fully determined by a string **seed**, so the same seed always produces the same icon on every device.
 
-> `blades` and `spears` are ports of Brian MacIntosh's Icon Machine; `axes` is an original generator added in this project (haft + procedural axe head).
+> `blades` and `spears` are ports of Brian MacIntosh's Icon Machine; `axes`, `staffs`, `tridents`, and `shields` are original generators added in this project.
 
 ![Generated blades and spears](assets/preview.png)
 
@@ -14,7 +14,7 @@ Three generators — **blades**, **spears**, and **axes** — each built from tr
 
 - **Pure canvas 2D** — no WebGL, no Three.js, no sprite sheets
 - **Deterministic** — same `seed` + class → same icon everywhere; safe to store in a database
-- **Three generators** — `blades`, `spears`, `axes`, plus meta-selectors `anyweapon` and `any`
+- **Six generators** — `blades`, `spears`, `axes`, `staffs`, `tridents`, `shields`, plus meta-selectors `anyweapon` and `any`
 - **Pixel-perfect** — renders at a native resolution (default 32×32) and scales up with `image-rendering: pixelated`
 - **React component included** — `<WeaponIcon>` with zero configuration; framework-agnostic core if you don't use React
 - **Tree-shakeable** — generator core, React component, and math utilities are separate exports
@@ -67,13 +67,13 @@ The only value you need to persist.
 interface IconConfig {
   /** String seed. Drives every procedural choice. */
   seed: string;
-  /** "blades" | "spears" | "axes" | "any" | "anyweapon" */
+  /** "blades" | "spears" | "axes" | "staffs" | "tridents" | "shields" | "any" | "anyweapon" */
   iconClass: IconClassSelector;
 }
 ```
 
-- `blades` / `spears` / `axes` — draw that specific category.
-- `anyweapon` / `any` — deterministically pick one of `blades` / `spears` / `axes` from the seed.
+- `blades` / `spears` / `axes` / `staffs` / `tridents` / `shields` — draw that specific category.
+- `anyweapon` / `any` — deterministically pick one of the six concrete classes from the seed.
 
 ---
 
