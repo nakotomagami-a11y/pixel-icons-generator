@@ -6,7 +6,7 @@ Six generators — **blades**, **spears**, **axes**, **staffs**, **tridents**, a
 
 > `blades` and `spears` are ports of Brian MacIntosh's Icon Machine; `axes`, `staffs`, `tridents`, and `shields` are original generators added in this project.
 
-![Generated blades and spears](assets/preview.png)
+![Generated blades, spears, axes, staffs, tridents, and shields](assets/preview.png)
 
 ---
 
