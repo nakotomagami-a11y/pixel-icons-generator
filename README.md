@@ -106,9 +106,7 @@ Generate a random `IconConfig` using `Math.random()` — for "reroll" buttons, n
 
 ## Credits
 
-This is a TypeScript port of [**Icon Machine**](https://github.com/BrianMacIntosh/icon-machine) by [**Brian MacIntosh**](https://www.brianmacintosh.com/), originally written in JavaScript. All of the procedural drawing algorithms — blade cores, crossguards, grips, hafts, and round ornaments — are his work. (His original also generates potions; only the weapon generators are ported here.) This package translates that logic to standalone TypeScript with the DOM/UI stripped out, so it can be embedded as a library.
-
-Please support and credit the original author.
+This project was originally inspired by [Icon Machine](https://github.com/BrianMacIntosh/icon-machine) by [Brian MacIntosh](https://www.brianmacintosh.com/), which was originally written in JavaScript.
 
 ---
 
