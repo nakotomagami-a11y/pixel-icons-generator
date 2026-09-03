@@ -1,6 +1,6 @@
 import type { Pen, BladeStyle, CrossguardParams, CrossguardResults, OrnamentParams } from "../pen";
 import type { Rng } from "../rng";
-import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeParts } from "../types";
+import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeModification, BladeParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { pickGem, pickCrystal } from "../palette";
 
@@ -44,6 +44,50 @@ const PROFILE_KEYS = Object.keys(PROFILES) as BladeProfile[];
 const GUARDS: Guard[] = ["bar", "bar", "swept", "wings", "disc", "none"];
 const POMMELS: Pommel[] = ["round", "gem", "none", "none", "none"];
 
+// A base of one-off flourishes for the plain arming-sword shape — currently
+// knight-only (see `BladeParts.modification`'s doc comment). "none" is
+// weighted 2x so most random rolls stay a clean blade; the flourish is a
+// deliberate pick, not the common case.
+const MODIFICATIONS: BladeModification[] = ["none", "none", "serrated", "notched", "fullered", "riveted", "wavy"];
+
+/** Merge a modification's style deltas onto the profile's base style. Only
+ *  the shape-affecting knobs `drawBladeHelper` already understands — no new
+ *  rendering primitives needed. `dscale` scales `serrate`/`serratePeriod`
+ *  ourselves — unlike `waveLen` (scaled internally by `drawBladeHelper`),
+ *  serrations are applied in raw render pixels, so left unscaled they shrink
+ *  to invisible on larger icons. */
+function applyModification(style: BladeStyle, mod: BladeModification, dscale: number): void {
+  switch (mod) {
+    case "serrated":
+      // Fine, frequent teeth on the cutting edge only.
+      style.serrate = 1.3 * dscale;
+      style.serratePeriod = 3 * dscale;
+      style.serrateSide = "edge";
+      break;
+    case "notched":
+      // Fewer, chunkier notches on both edges — a castellated look, distinct
+      // from "serrated"'s fine sawtooth.
+      style.serrate = 1.8 * dscale;
+      style.serratePeriod = 5.5 * dscale;
+      style.serrateSide = "both";
+      break;
+    case "fullered":
+      style.fuller = true;
+      break;
+    case "wavy":
+      // Gentler than the dedicated `flamberge` profile's wave (0.22/8) — this
+      // is a knight blade with a hint of ripple, not a full kris. `wave` is a
+      // radian amplitude (scale-invariant by design); `waveLen` gets *dscale
+      // internally, same as `flamberge`'s unscaled 8.
+      style.wave = 0.16;
+      style.waveLen = 7;
+      break;
+    case "riveted":
+    case "none":
+      break; // riveted is a post-draw stamp, see drawBlade
+  }
+}
+
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const rangeIncl = (r: Rng, lo: number, hi: number) => r.range(lo, hi + 1);
 const norm = (x: number, y: number) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
@@ -61,10 +105,20 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
   // renamed (e.g. an old "saber"/"estoc" pick) — fall back to a random pick
   // rather than crash on `PROFILES[undefined]`.
   const requestedProfile = parts?.profile && parts.profile in PROFILES ? parts.profile : undefined;
-  const prof = PROFILES[requestedProfile ?? pick(r, PROFILE_KEYS)];
+  const profileKey = requestedProfile ?? pick(r, PROFILE_KEYS);
+  const prof = PROFILES[profileKey];
   const style = prof.makeStyle?.(r) ?? {};
   // ~12% of blades are an enchanted crystal (colour variety).
   if (r.float() < 0.12) style.metal = pickCrystal(r);
+  // Modification is currently knight-only (see `BladeParts.modification`'s
+  // doc comment) — other profiles already carry a strong shape identity of
+  // their own, so a random pick still rolls even if a stale/foreign value is
+  // set (e.g. leftover from switching Profile away from Knight in the UI).
+  const modification: BladeModification =
+    profileKey === "knight"
+      ? (parts?.modification && MODIFICATIONS.includes(parts.modification) ? parts.modification : pick(r, MODIFICATIONS))
+      : "none";
+  applyModification(style, modification, dscale);
   let guard = parts?.guard ?? pick(r, prof.guardPool ?? GUARDS);
   // A broad blade's base overlaps the grip; without a crossguard it reads as a
   // slab sitting straight on the pommel. Force a real guard for wide profiles
@@ -116,6 +170,19 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
       const cx = o, cy = pen.dimension - 1 - o;
       pen.fillCone(cx, cy, dirA.x, dirA.y, off, len, half, blade.tipColor, blade.hiltColor);
       pen.fillCone(cx, cy, dirB.x, dirB.y, off, len, half, blade.tipColor, blade.hiltColor);
+    }
+  }
+
+  // Riveted modification: small round studs stamped down the blade's own
+  // centerline, like a bolstered/laminated blade. Same anchor scheme as the
+  // barbed thorns above (`o` walks the ortho diagonal from the blade's base).
+  if (modification === "riveted") {
+    const startO = blade.startOrtho + Math.round(3 * dscale);
+    const endO = pen.dimension - Math.round(7 * dscale);
+    const spacing = Math.max(4, Math.round(4.5 * dscale));
+    const rivetRadius = Math.max(1, 0.9 * dscale);
+    for (let o = startO; o < endO; o += spacing) {
+      pen.drawRoundOrnamentHelper({ center: new Vector(o, pen.dimension - 1 - o), radius: rivetRadius });
     }
   }
 

@@ -6,7 +6,7 @@
  * actual array to map over.
  */
 import type {
-  BladeProfile, BladeGuard, BladePommel,
+  BladeProfile, BladeGuard, BladePommel, BladeModification,
   AxeHead,
   SpearHead,
   StaffHead, StaffShaft,
@@ -42,6 +42,15 @@ export const BLADE_POMMEL_OPTIONS: PartOption<BladePommel>[] = [
   { value: "round", label: "Round" },
   { value: "gem", label: "Gem" },
   { value: "none", label: "None" },
+];
+/** Knight-only for now — see `BladeParts.modification`'s doc comment. */
+export const BLADE_MODIFICATION_OPTIONS: PartOption<BladeModification>[] = [
+  { value: "none", label: "None" },
+  { value: "serrated", label: "Serrated Edge" },
+  { value: "notched", label: "Notched Edge" },
+  { value: "fullered", label: "Fullered" },
+  { value: "riveted", label: "Riveted Spine" },
+  { value: "wavy", label: "Wavy Edge" },
 ];
 
 export const AXE_HEAD_OPTIONS: PartOption<AxeHead>[] = [

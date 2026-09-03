@@ -26,15 +26,26 @@ export type IconClassSelector = IconClass | "any" | "anyweapon";
  * a sword's blade profile, an axe's head shape). Anything left `undefined`
  * still comes from `seed` via the normal random pick, same as before — only
  * the fields you set here are pinned. Small embellishments (gems, wraps,
- * weathering, notches, colour) are intentionally NOT overridable here; they
- * stay randomized so a "Random" reroll still gives useful variety even with
- * parts locked in.
+ * weathering, colour) are intentionally NOT overridable here; they stay
+ * randomized so a "Random" reroll still gives useful variety even with parts
+ * locked in. `BladeParts.modification` is a deliberate carve-out from that
+ * rule — see its doc comment.
  */
 export interface BladeParts {
     profile?: BladeProfile;
     guard?: BladeGuard;
     pommel?: BladePommel;
     twoHanded?: boolean;
+    /**
+     * A shape cut into or added onto the blade — a base of one-off flourishes
+     * to make individual swords feel more unique, on top of the profile's own
+     * silhouette. Currently only applied to the `knight` profile (the plain
+     * arming-sword shape reads cleanest with an added flourish; other profiles
+     * already carry a strong identity of their own). Unlike every other blade
+     * embellishment this one IS overridable, by request — pick a specific look
+     * instead of rerolling the seed and hoping.
+     */
+    modification?: BladeModification;
 }
 export interface AxeParts {
     head?: AxeHead;
@@ -57,6 +68,7 @@ export interface ShieldParts {
 export type BladeProfile = "knight" | "broad" | "cleaver" | "rapier" | "flamberge" | "leaf" | "bowie" | "katana" | "dagger" | "barbed";
 export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";
 export type BladePommel = "round" | "gem" | "none";
+export type BladeModification = "none" | "serrated" | "notched" | "fullered" | "riveted" | "wavy";
 export type AxeHead = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd";
 export type SpearHead = "leaf" | "pike" | "broadleaf" | "winged" | "glaive" | "harpoon" | "needle" | "partisan" | "forked";
 export type StaffHead = "bare" | "claws" | "crescent" | "halo" | "wings" | "cluster" | "collar" | "loop";
