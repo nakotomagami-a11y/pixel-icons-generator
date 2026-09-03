@@ -62,7 +62,15 @@ export class IconGenerator {
 
     setCelSteps(this.pen.celSteps);
     this.pen.rng.seed(seed);
-    DRAW[drawClass](this.pen);
+    const parts = config.parts;
+    switch (drawClass) {
+      case "blades": drawBlade(this.pen, parts?.blades); break;
+      case "spears": drawSpear(this.pen, parts?.spears); break;
+      case "axes": drawAxe(this.pen, parts?.axes); break;
+      case "staffs": drawStaff(this.pen, parts?.staffs); break;
+      case "tridents": drawTrident(this.pen, parts?.tridents); break;
+      case "shields": drawShield(this.pen, parts?.shields); break;
+    }
 
     // Particle FX overlay (drawn over the finished, outlined icon).
     if (this.pen.particles && this.pen.particles !== "none") {

@@ -11,7 +11,7 @@ import { WOOD, DARK, BONE, BLUED, GOLD, STEEL, pickGem } from "../palette";
 const pick = (r, arr) => arr[Math.floor(r.float() * arr.length) % arr.length];
 const HEADS = ["bare", "claws", "claws", "crescent", "halo", "wings", "cluster", "collar", "collar", "loop", "loop"];
 const SHAFTS = ["straight", "twisted", "twisted", "wrapped", "segmented", "straight"];
-export function drawStaff(pen) {
+export function drawStaff(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
@@ -20,8 +20,8 @@ export function drawStaff(pen) {
     const isWand = r.float() < 0.35;
     const gemRadius = (isWand ? r.rangeFloat(2.4, 3.4) : r.rangeFloat(3.6, 5.4)) * dscale;
     const haftMaxRadius = (isWand ? r.rangeFloat(0.9, 1.4) : r.rangeFloat(1.4, 2.2)) * dscale;
-    const head = pick(r, HEADS);
-    const shaft = pick(r, SHAFTS);
+    const head = parts?.head ?? pick(r, HEADS);
+    const shaft = parts?.shaft ?? pick(r, SHAFTS);
     const gemOrtho = bounds.h - 1 - Math.ceil(gemRadius * 1.25) - 1;
     const gemCenter = new Vector(gemOrtho, bounds.h - 1 - gemOrtho);
     // Shaft material + haft.

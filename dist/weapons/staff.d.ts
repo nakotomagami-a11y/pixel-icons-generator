@@ -1,2 +1,3 @@
 import type { Pen } from "../pen";
-export declare function drawStaff(pen: Pen): void;
+import type { StaffParts } from "../types";
+export declare function drawStaff(pen: Pen, parts?: StaffParts): void;

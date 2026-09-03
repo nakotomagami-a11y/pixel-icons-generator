@@ -1,2 +1,3 @@
 import type { Pen } from "../pen";
-export declare function drawShield(pen: Pen): void;
+import type { ShieldParts } from "../types";
+export declare function drawShield(pen: Pen, parts?: ShieldParts): void;

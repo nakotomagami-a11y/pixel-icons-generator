@@ -1,5 +1,6 @@
 import type { Pen } from "../pen";
 import type { Color } from "../types";
+import type { AxeHead as Head, AxeParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorLerp, colorStr, colorDarken } from "../color";
 import { Rng } from "../rng";
@@ -13,7 +14,6 @@ import { pickBladeMetal, pickGem, pickCrystal, GOLD, WOOD, DARK, BRONZE } from "
  * derived from the reference vocabulary, not copied pixels.
  */
 
-type Head = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd";
 const HEADS: Head[] = ["fan", "bearded", "broad", "double", "crescent", "halberd", "fan", "bearded", "crescent", "halberd"];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
@@ -43,7 +43,7 @@ interface FanParams {
   fuller?: boolean; // dark engraved groove down the centre of the bit
 }
 
-export function drawAxe(pen: Pen): void {
+export function drawAxe(pen: Pen, parts?: AxeParts): void {
   pen.rng.checkpoint();
   const r = pen.rng;
 
@@ -53,7 +53,7 @@ export function drawAxe(pen: Pen): void {
 
   pen.clearCanvas();
 
-  const head = pick(r, HEADS);
+  const head = parts?.head ?? pick(r, HEADS);
   const metal = r.float() < 0.1 ? pickCrystal(r) : pickBladeMetal(r); // ~10% enchanted crystal head
   const accent = r.float() < 0.5 ? GOLD : metal;
 
