@@ -22,8 +22,6 @@ export interface PartOption<T extends string> {
 export const BLADE_PROFILE_OPTIONS: PartOption<BladeProfile>[] = [
   { value: "knight", label: "Knight" },
   { value: "broad", label: "Broadsword" },
-  { value: "saber", label: "Saber" },
-  { value: "falchion", label: "Falchion" },
   { value: "cleaver", label: "Cleaver" },
   { value: "rapier", label: "Rapier" },
   { value: "flamberge", label: "Flamberge" },
