@@ -27,7 +27,7 @@ export const BLADE_PROFILE_OPTIONS: PartOption<BladeProfile>[] = [
   { value: "flamberge", label: "Flamberge" },
   { value: "leaf", label: "Leaf Blade" },
   { value: "bowie", label: "Bowie" },
-  { value: "estoc", label: "Estoc" },
+  { value: "katana", label: "Katana" },
   { value: "dagger", label: "Dagger" },
   { value: "barbed", label: "Barbed" },
 ];
