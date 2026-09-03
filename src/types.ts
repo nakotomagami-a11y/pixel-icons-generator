@@ -61,7 +61,7 @@ export interface ShieldParts {
 
 export type BladeProfile =
   | "knight" | "broad" | "cleaver" | "rapier"
-  | "flamberge" | "leaf" | "bowie" | "estoc"
+  | "flamberge" | "leaf" | "bowie" | "katana"
   | "dagger" | "barbed";
 export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";
 export type BladePommel = "round" | "gem" | "none";

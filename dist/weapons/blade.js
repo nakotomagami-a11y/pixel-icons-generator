@@ -13,7 +13,7 @@ const PROFILES = {
     flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
     leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
     bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
-    estoc: { radius: [2, 2], taper: 0.14, hilt: [8, 12], makeStyle: () => ({ widthAmp: 0, fuller: true }) },
+    katana: { radius: [2, 2], taper: 0.14, hilt: [8, 12], makeStyle: () => ({ widthAmp: 0, fuller: true }) },
     dagger: { radius: [3, 3], taper: 0.3, hilt: [5, 7], makeStyle: () => ({ widthAmp: 0, clip: 0.22, singleEdge: true }) },
     barbed: { radius: [2, 3], taper: 0.2, hilt: [6, 9], barbed: true, makeStyle: () => ({ widthAmp: 0 }) },
 };
@@ -29,9 +29,9 @@ export function drawBlade(pen, parts) {
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const dscale = bounds.h / 32;
     pen.clearCanvas();
-    // A persisted skill config can name a profile that's since been removed
-    // from the roster (e.g. an old "katana"/"saber" pick) — fall back to a
-    // random pick rather than crash on `PROFILES[undefined]`.
+    // A persisted skill config can name a profile that's since been removed or
+    // renamed (e.g. an old "saber"/"estoc" pick) — fall back to a random pick
+    // rather than crash on `PROFILES[undefined]`.
     const requestedProfile = parts?.profile && parts.profile in PROFILES ? parts.profile : undefined;
     const prof = PROFILES[requestedProfile ?? pick(r, PROFILE_KEYS)];
     const style = prof.makeStyle?.(r) ?? {};
@@ -49,8 +49,16 @@ export function drawBlade(pen, parts) {
     const twoHanded = parts?.twoHanded ?? r.float() < 0.22;
     const startRadius = Math.ceil(rangeIncl(r, prof.radius[0], prof.radius[1]) * dscale);
     const pommelLength = pommel === "none" ? 0 : Math.ceil((0.5 + r.floatLow() * 0.9) * dscale);
-    const hiltLength = Math.ceil(rangeIncl(r, prof.hilt[0], prof.hilt[1]) * dscale) +
+    const rawHiltLength = Math.ceil(rangeIncl(r, prof.hilt[0], prof.hilt[1]) * dscale) +
         (twoHanded ? Math.ceil(rangeIncl(r, 3, 6) * dscale) : 0);
+    // Hard cap the grip at a fixed share of the blade's total reach (pommel to
+    // tip) — a long profile hilt range stacked with the two-handed bonus could
+    // otherwise eat up to half the icon as handle. The blade itself grows to
+    // fill whatever's left of the canvas diagonal past pommel+hilt+guard (see
+    // `drawBladeHelper`), so capping the grip directly guarantees it stays a
+    // minor fraction of the whole weapon regardless of profile/two-handed roll.
+    const maxHiltLength = Math.round(pen.dimension * Math.SQRT2 * 0.22);
+    const hiltLength = Math.min(rawHiltLength, maxHiltLength);
     const xguardWidth = guard === "none" ? Math.ceil(dscale) : Math.ceil(rangeIncl(r, 1, 3) * dscale);
     const taperFactor = Math.max(0.05, prof.taper + r.rangeFloat(-0.03, 0.03));
     const blade = pen.drawBladeHelper({
