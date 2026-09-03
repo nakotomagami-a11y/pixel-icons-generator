@@ -7,7 +7,7 @@
 export type {
   Color, IconClass, IconClassSelector, IconConfig,
   WeaponParts,
-  BladeParts, BladeProfile, BladeGuard, BladePommel,
+  BladeParts, BladeProfile, BladeGuard, BladePommel, BladeModification,
   AxeParts, AxeHead,
   SpearParts, SpearHead,
   StaffParts, StaffHead, StaffShaft,
@@ -21,7 +21,7 @@ export { Vector, Bounds } from "./math";
 export { PARTICLE_TYPES, pickParticleType, type ParticleType } from "./particles";
 export {
   type PartOption,
-  BLADE_PROFILE_OPTIONS, BLADE_GUARD_OPTIONS, BLADE_POMMEL_OPTIONS,
+  BLADE_PROFILE_OPTIONS, BLADE_GUARD_OPTIONS, BLADE_POMMEL_OPTIONS, BLADE_MODIFICATION_OPTIONS,
   AXE_HEAD_OPTIONS,
   SPEAR_HEAD_OPTIONS,
   STAFF_HEAD_OPTIONS, STAFF_SHAFT_OPTIONS,
