@@ -7,7 +7,7 @@ import { pickGem, pickCrystal } from "../palette";
 /**
  * Mix-and-match sword: a blade profile, a guard, a grip and a pommel are each
  * picked (mostly) independently so the same generator yields knightly swords,
- * cleavers, rapiers, katanas and flamberges with a variety of hilts — the
+ * cleavers, rapiers and flamberges with a variety of hilts — the
  * "copy blades + handles and mix them" brief, done procedurally rather than
  * by copying the reference sheet's pixels.
  */
@@ -35,14 +35,8 @@ const PROFILES: Record<BladeProfile, Profile> = {
   flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
   leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
   bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
-  katana: { radius: [3, 3], taper: 0.2, hilt: [8, 11], makeStyle: () => ({ curve: Math.PI / 165, curveDir: 1, widthAmp: 0, singleEdge: true, clip: 0.14 }) },
-  greatsword: { radius: [4, 5], taper: 0.16, hilt: [9, 13], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
   estoc: { radius: [2, 2], taper: 0.14, hilt: [8, 12], makeStyle: () => ({ widthAmp: 0, fuller: true }) },
-  sawblade: { radius: [3, 4], taper: 0.2, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.4 }) },
   dagger: { radius: [3, 3], taper: 0.3, hilt: [5, 7], makeStyle: () => ({ widthAmp: 0, clip: 0.22, singleEdge: true }) },
-  scimitar: { radius: [3, 4], taper: 0.28, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 95, curveDir: 1, widthAmp: 0, singleEdge: true, maxTurn: Math.PI / 3.2 }) },
-  bigsaw: { radius: [3, 4], taper: 0.22, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 2.4, serratePeriod: 5 }) },
-  spinesaw: { radius: [3, 4], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.8, serrateSide: "spine", serratePeriod: 4 }) },
   barbed: { radius: [2, 3], taper: 0.2, hilt: [6, 9], barbed: true, makeStyle: () => ({ widthAmp: 0 }) },
 };
 const PROFILE_KEYS = Object.keys(PROFILES) as BladeProfile[];
