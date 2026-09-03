@@ -1,6 +1,19 @@
 import { Vector } from "../math";
 import { colorLerp, colorDarken, colorStr } from "../color";
 import { STEEL, BLUED, GOLD, WOOD, DARK, BONE, BRONZE, DARKIRON, pickGem, pickCrystal, pickShieldPaint, } from "../palette";
+/**
+ * Mix-and-match shield: a body silhouette from several classic profiles
+ * (heater, kite, tower, round, crest, teardrop), a field that is either a
+ * worked material (wood grain / hammered metal / bone) or a painted heraldic
+ * blazon (per-pale, per-bend, quarterly, chief), an optional metal rim with
+ * corner reinforcement, and a centrepiece emblem (boss, gem, cross, mullet
+ * star, chevron, or none). Unlike the other weapons — which are drawn along
+ * the bottom-left→top-right diagonal — a shield is body-centred and roughly
+ * bilaterally symmetric, so it gets its own coordinate frame: `dx` = offset
+ * from the vertical centreline, `t` = normalised height (0 top, 1 bottom).
+ * Archetypes derived from classic fantasy shield iconography (and the
+ * Tiny-Swords warrior's quartered heater), not pixel-copied.
+ */
 const SHAPES = ["heater", "heater", "kite", "tower", "round", "crest", "teardrop", "heater", "kite", "crest"];
 const BLAZONS = ["quarterly", "quarterly", "per-pale", "per-bend", "chief", "plain"];
 const EMBLEMS = ["boss", "boss", "gem", "cross", "cross", "star", "chevron", "none"];
@@ -117,13 +130,13 @@ function applyWoodGrain(color, dx, dscale) {
     const phase = ((dx % plankW) + plankW) % plankW;
     return Math.abs(phase - plankW / 2) < 0.55 ? colorDarken(color, 0.3) : color;
 }
-export function drawShield(pen) {
+export function drawShield(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const B = pen.dimension;
     const dscale = B / 32;
     pen.clearCanvas();
-    const shape = pick(r, SHAPES);
+    const shape = parts?.shape ?? pick(r, SHAPES);
     const marginX = Math.max(1, Math.round(B * 0.11));
     const marginTop = Math.max(1, Math.round(B * 0.08));
     const marginBottom = Math.max(1, Math.round(B * 0.035));
@@ -135,14 +148,18 @@ export function drawShield(pen) {
     const maxHalf = shape === "round" ? Math.min(fullHalf, H / 2) : fullHalf * widthScale;
     const m = { cx, top, H, maxHalf };
     // -- field: worked material, or painted heraldic blazon -------------------
-    const crystalField = r.float() < 0.06;
-    const painted = !crystalField && r.float() < 0.58;
+    // An explicit blazon pick forces the field into (or out of) "painted" mode
+    // so the choice actually shows — "plain" means the material field (matching
+    // what "plain" already meant when unpainted), anything else forces painted.
+    const explicitBlazon = parts?.blazon;
+    const crystalField = explicitBlazon ? false : r.float() < 0.06;
+    const painted = explicitBlazon ? explicitBlazon !== "plain" : !crystalField && r.float() < 0.58;
     const materialRamps = [STEEL, BLUED, WOOD, WOOD, DARK, BONE, BRONZE, DARKIRON];
     const fieldA = crystalField ? pickCrystal(r) : painted ? pickShieldPaint(r) : pick(r, materialRamps);
     let fieldB = painted ? pickShieldPaint(r) : GOLD;
     if (painted && fieldB === fieldA)
         fieldB = pickShieldPaint(r);
-    const blazon = painted ? pick(r, BLAZONS) : "plain";
+    const blazon = painted ? (explicitBlazon && explicitBlazon !== "plain" ? explicitBlazon : pick(r, BLAZONS)) : "plain";
     const isWoodPlain = !painted && !crystalField && fieldA === WOOD;
     const rimMetalPool = [GOLD, STEEL, GOLD, BRONZE, DARKIRON];
     const rimMetal = pick(r, rimMetalPool);
@@ -205,7 +222,7 @@ export function drawShield(pen) {
         }
     }
     // -- centrepiece emblem -----------------------------------------------------
-    const emblem = pick(r, EMBLEMS);
+    const emblem = parts?.emblem ?? pick(r, EMBLEMS);
     const centerY = top + H * (shape === "round" ? 0.5 : shape === "tower" ? 0.46 : 0.4);
     const center = new Vector(cx, centerY);
     const er = Math.min(maxHalf, H * 0.5) * (shape === "round" ? 0.6 : 0.5);

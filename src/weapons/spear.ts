@@ -1,5 +1,6 @@
 import type { Pen, BladeStyle } from "../pen";
 import type { Color } from "../types";
+import type { SpearHead as HeadKey, SpearParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { Rng } from "../rng";
 import { colorStr, colorDarken } from "../color";
@@ -24,7 +25,7 @@ interface HeadCfg {
   style: (r: Rng) => BladeStyle;
 }
 
-const HEADS: Record<string, HeadCfg> = {
+const HEADS: Record<HeadKey, HeadCfg> = {
   // Spearheads taper to a POINT — high taperFactor, or they read as blunt paddles.
   leaf: { len: [12, 16], radius: [1.3, 1.9], taper: 0.58, style: () => ({ widthAmp: 0, bulge: 0.35 }) },
   pike: { len: [9, 13], radius: [1.1, 1.6], taper: 0.62, style: () => ({ widthAmp: 0 }) }, // simple sharp point
@@ -36,7 +37,7 @@ const HEADS: Record<string, HeadCfg> = {
   partisan: { len: [13, 17], radius: [1.2, 1.7], taper: 0.55, prongs: true, style: () => ({ widthAmp: 0, bulge: 0.25 }) },
   forked: { len: [10, 13], radius: [1.2, 1.7], taper: 0.5, forked: true, style: () => ({ widthAmp: 0, bulge: 0.2 }) },
 };
-const HEAD_KEYS = ["leaf", "leaf", "pike", "pike", "broadleaf", "winged", "glaive", "glaive", "harpoon", "needle", "partisan", "forked"];
+const HEAD_KEYS: HeadKey[] = ["leaf", "leaf", "pike", "pike", "broadleaf", "winged", "glaive", "glaive", "harpoon", "needle", "partisan", "forked"];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const rf = (r: Rng, lo: number, hi: number) => r.rangeFloat(lo, hi);
@@ -52,7 +53,7 @@ export function ribbonStyle(r: Rng, dscale: number): { wave?: number; waveLen?: 
   return { wave: r.rangeFloat(2.4, 3.8) * dscale, waveLen: r.rangeFloat(4, 6) * dscale, taper: true, twist: true }; // strong flutter
 }
 
-export function drawSpear(pen: Pen): void {
+export function drawSpear(pen: Pen, parts?: SpearParts): void {
   pen.rng.checkpoint();
   const r = pen.rng;
 
@@ -62,7 +63,7 @@ export function drawSpear(pen: Pen): void {
 
   pen.clearCanvas();
 
-  const cfg = HEADS[pick(r, HEAD_KEYS)]!;
+  const cfg = HEADS[parts?.head ?? pick(r, HEAD_KEYS)]!;
   const headLen = rf(r, cfg.len[0], cfg.len[1]) * dscale;
   const startRadius = Math.max(1, Math.ceil(rf(r, cfg.radius[0], cfg.radius[1]) * dscale));
   const tipStartDiag = canvasDiag - headLen;

@@ -1,17 +1,24 @@
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorLerp, colorStr, colorDarken } from "../color";
 import { pickBladeMetal, pickGem, pickCrystal, GOLD, WOOD, DARK, BRONZE } from "../palette";
+/**
+ * Mix-and-match axe: a haft along the bottom-left→top-right diagonal, a head of
+ * one of several shapes (single bit, bearded, broad fan, double bit, crescent),
+ * and optional features — top spike, back pick/spike, notched edge, gem inset —
+ * plus haft details (leather wrap bands, end ring / pommel). Procedural shapes
+ * derived from the reference vocabulary, not copied pixels.
+ */
 const HEADS = ["fan", "bearded", "broad", "double", "crescent", "halberd", "fan", "bearded", "crescent", "halberd"];
 const pick = (r, arr) => arr[Math.floor(r.float() * arr.length) % arr.length];
 const norm = (x, y) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
-export function drawAxe(pen) {
+export function drawAxe(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const dscale = bounds.h / 32;
     const canvasDiag = Math.hypot(bounds.w, bounds.h);
     pen.clearCanvas();
-    const head = pick(r, HEADS);
+    const head = parts?.head ?? pick(r, HEADS);
     const metal = r.float() < 0.1 ? pickCrystal(r) : pickBladeMetal(r); // ~10% enchanted crystal head
     const accent = r.float() < 0.5 ? GOLD : metal;
     // Head anchor sits at the top of the haft; the haft ends just past it so the

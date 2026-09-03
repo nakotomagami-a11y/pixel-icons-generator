@@ -1,5 +1,6 @@
 import type { Pen, BladeStyle, CrossguardParams, CrossguardResults, OrnamentParams } from "../pen";
 import type { Rng } from "../rng";
+import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { pickGem, pickCrystal } from "../palette";
 
@@ -20,38 +21,36 @@ interface Profile {
   makeStyle?: (r: Rng) => BladeStyle;
 }
 
-const PROFILES: Profile[] = [
-  /* knight    */ { radius: [3, 4], taper: 0.16, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0 }) },
-  /* broad     */ { radius: [4, 5], taper: 0.2, hilt: [6, 9], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
-  /* saber     */ { radius: [3, 4], taper: 0.3, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 108, curveDir: 1, widthAmp: 0, singleEdge: true }) },
-  /* falchion  */ { radius: [4, 5], taper: 0.24, hilt: [6, 8], makeStyle: () => ({ curve: Math.PI / 130, curveDir: 1, widthAmp: 0, singleEdge: true }) },
-  /* cleaver   */ { radius: [5, 6], taper: 0.26, hilt: [5, 8], wide: true, makeStyle: () => ({ widthAmp: 0, singleEdge: true }) },
-  /* rapier    */ { radius: [2, 2], taper: 0.1, hilt: [7, 11], makeStyle: () => ({ widthAmp: 0 }) },
-  /* flamberge */ { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
-  /* leaf      */ { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
-  /* bowie     */ { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
-  /* katana    */ { radius: [3, 3], taper: 0.2, hilt: [8, 11], makeStyle: () => ({ curve: Math.PI / 165, curveDir: 1, widthAmp: 0, singleEdge: true, clip: 0.14 }) },
-  /* greatsword*/ { radius: [4, 5], taper: 0.16, hilt: [9, 13], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
-  /* estoc     */ { radius: [2, 2], taper: 0.14, hilt: [8, 12], makeStyle: () => ({ widthAmp: 0, fuller: true }) },
-  /* sawblade  */ { radius: [3, 4], taper: 0.2, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.4 }) },
-  /* dagger    */ { radius: [3, 3], taper: 0.3, hilt: [5, 7], makeStyle: () => ({ widthAmp: 0, clip: 0.22, singleEdge: true }) },
-  /* scimitar  */ { radius: [3, 4], taper: 0.28, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 95, curveDir: 1, widthAmp: 0, singleEdge: true, maxTurn: Math.PI / 3.2 }) },
-  /* bigsaw    */ { radius: [3, 4], taper: 0.22, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 2.4, serratePeriod: 5 }) },
-  /* spinesaw  */ { radius: [3, 4], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.8, serrateSide: "spine", serratePeriod: 4 }) },
-  /* barbed    */ { radius: [2, 3], taper: 0.2, hilt: [6, 9], barbed: true, makeStyle: () => ({ widthAmp: 0 }) },
-];
+const PROFILES: Record<BladeProfile, Profile> = {
+  knight: { radius: [3, 4], taper: 0.16, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0 }) },
+  broad: { radius: [4, 5], taper: 0.2, hilt: [6, 9], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
+  saber: { radius: [3, 4], taper: 0.3, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 108, curveDir: 1, widthAmp: 0, singleEdge: true }) },
+  falchion: { radius: [4, 5], taper: 0.24, hilt: [6, 8], makeStyle: () => ({ curve: Math.PI / 130, curveDir: 1, widthAmp: 0, singleEdge: true }) },
+  cleaver: { radius: [5, 6], taper: 0.26, hilt: [5, 8], wide: true, makeStyle: () => ({ widthAmp: 0, singleEdge: true }) },
+  rapier: { radius: [2, 2], taper: 0.1, hilt: [7, 11], makeStyle: () => ({ widthAmp: 0 }) },
+  flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
+  leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
+  bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
+  katana: { radius: [3, 3], taper: 0.2, hilt: [8, 11], makeStyle: () => ({ curve: Math.PI / 165, curveDir: 1, widthAmp: 0, singleEdge: true, clip: 0.14 }) },
+  greatsword: { radius: [4, 5], taper: 0.16, hilt: [9, 13], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
+  estoc: { radius: [2, 2], taper: 0.14, hilt: [8, 12], makeStyle: () => ({ widthAmp: 0, fuller: true }) },
+  sawblade: { radius: [3, 4], taper: 0.2, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.4 }) },
+  dagger: { radius: [3, 3], taper: 0.3, hilt: [5, 7], makeStyle: () => ({ widthAmp: 0, clip: 0.22, singleEdge: true }) },
+  scimitar: { radius: [3, 4], taper: 0.28, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 95, curveDir: 1, widthAmp: 0, singleEdge: true, maxTurn: Math.PI / 3.2 }) },
+  bigsaw: { radius: [3, 4], taper: 0.22, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 2.4, serratePeriod: 5 }) },
+  spinesaw: { radius: [3, 4], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, singleEdge: true, serrate: 1.8, serrateSide: "spine", serratePeriod: 4 }) },
+  barbed: { radius: [2, 3], taper: 0.2, hilt: [6, 9], barbed: true, makeStyle: () => ({ widthAmp: 0 }) },
+};
+const PROFILE_KEYS = Object.keys(PROFILES) as BladeProfile[];
 
-type Guard = "bar" | "swept" | "wings" | "disc" | "none";
 const GUARDS: Guard[] = ["bar", "bar", "swept", "wings", "disc", "none"];
-
-type Pommel = "round" | "gem" | "none";
 const POMMELS: Pommel[] = ["round", "gem", "none", "none", "none"];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const rangeIncl = (r: Rng, lo: number, hi: number) => r.range(lo, hi + 1);
 const norm = (x: number, y: number) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
 
-export function drawBlade(pen: Pen): void {
+export function drawBlade(pen: Pen, parts?: BladeParts): void {
   pen.rng.checkpoint();
   const r = pen.rng;
 
@@ -60,16 +59,18 @@ export function drawBlade(pen: Pen): void {
 
   pen.clearCanvas();
 
-  const prof = pick(r, PROFILES);
+  const prof = PROFILES[parts?.profile ?? pick(r, PROFILE_KEYS)];
   const style = prof.makeStyle?.(r) ?? {};
   // ~12% of blades are an enchanted crystal (colour variety).
   if (r.float() < 0.12) style.metal = pickCrystal(r);
-  let guard = pick(r, GUARDS);
+  let guard = parts?.guard ?? pick(r, GUARDS);
   // A broad blade's base overlaps the grip; without a crossguard it reads as a
-  // slab sitting straight on the pommel. Force a real guard for wide profiles.
+  // slab sitting straight on the pommel. Force a real guard for wide profiles
+  // — even over an explicit "none"/"disc" pick, since that's a rendering
+  // artifact (slab-on-pommel), not a style choice worth honouring.
   if (prof.wide && (guard === "none" || guard === "disc")) guard = "bar";
-  const pommel = pick(r, POMMELS);
-  const twoHanded = r.float() < 0.22;
+  const pommel = parts?.pommel ?? pick(r, POMMELS);
+  const twoHanded = parts?.twoHanded ?? r.float() < 0.22;
 
   const startRadius = Math.ceil(rangeIncl(r, prof.radius[0], prof.radius[1]) * dscale);
   const pommelLength = pommel === "none" ? 0 : Math.ceil((0.5 + r.floatLow() * 0.9) * dscale);

@@ -29,14 +29,14 @@ export function ribbonStyle(r, dscale) {
         return { wave: r.rangeFloat(1.2, 2.2) * dscale, waveLen: r.rangeFloat(5, 7) * dscale, taper: false, twist: true, swallowtail: true }; // swallowtail banner
     return { wave: r.rangeFloat(2.4, 3.8) * dscale, waveLen: r.rangeFloat(4, 6) * dscale, taper: true, twist: true }; // strong flutter
 }
-export function drawSpear(pen) {
+export function drawSpear(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const canvasDiag = Math.hypot(bounds.w, bounds.h);
     const dscale = bounds.h / 32;
     pen.clearCanvas();
-    const cfg = HEADS[pick(r, HEAD_KEYS)];
+    const cfg = HEADS[parts?.head ?? pick(r, HEAD_KEYS)];
     const headLen = rf(r, cfg.len[0], cfg.len[1]) * dscale;
     const startRadius = Math.max(1, Math.ceil(rf(r, cfg.radius[0], cfg.radius[1]) * dscale));
     const tipStartDiag = canvasDiag - headLen;

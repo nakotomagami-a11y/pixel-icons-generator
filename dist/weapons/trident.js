@@ -3,13 +3,13 @@ import { pickHaft, pickPoleHead, pickGem, RIBBONS } from "../palette";
 import { ribbonStyle } from "./spear";
 // A haft topped by a crossbar and a fan of tapered prongs. Variations:
 // trident (2-3 prongs, steel, optional barbs) vs pitchfork (3-4 thin tines).
-export function drawTrident(pen) {
+export function drawTrident(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const dscale = bounds.h / 32;
     pen.clearCanvas();
-    const isPitchfork = r.float() < 0.3;
+    const isPitchfork = parts?.type ? parts.type === "pitchfork" : r.float() < 0.3;
     // Trident is ALWAYS 3 prongs (a 2-prong bident reads as a tuning fork); a
     // pitchfork gets 3–4 thicker tines (5 thin ones read as a comb/rake).
     const prongCount = isPitchfork ? r.range(3, 5) : 3;

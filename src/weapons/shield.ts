@@ -1,5 +1,6 @@
 import type { Pen } from "../pen";
 import type { Color } from "../types";
+import type { ShieldShape as Shape, ShieldBlazon as Blazon, ShieldEmblem as Emblem, ShieldParts } from "../types";
 import { Vector } from "../math";
 import { colorLerp, colorDarken, colorStr } from "../color";
 import { Rng } from "../rng";
@@ -32,13 +33,8 @@ import {
  * Tiny-Swords warrior's quartered heater), not pixel-copied.
  */
 
-type Shape = "heater" | "kite" | "tower" | "round" | "crest" | "teardrop";
 const SHAPES: Shape[] = ["heater", "heater", "kite", "tower", "round", "crest", "teardrop", "heater", "kite", "crest"];
-
-type Blazon = "plain" | "per-pale" | "per-bend" | "quarterly" | "chief";
 const BLAZONS: Blazon[] = ["quarterly", "quarterly", "per-pale", "per-bend", "chief", "plain"];
-
-type Emblem = "boss" | "gem" | "cross" | "star" | "chevron" | "none";
 const EMBLEMS: Emblem[] = ["boss", "boss", "gem", "cross", "cross", "star", "chevron", "none"];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
@@ -169,7 +165,7 @@ function applyWoodGrain(color: Color, dx: number, dscale: number): Color {
   return Math.abs(phase - plankW / 2) < 0.55 ? colorDarken(color, 0.3) : color;
 }
 
-export function drawShield(pen: Pen): void {
+export function drawShield(pen: Pen, parts?: ShieldParts): void {
   pen.rng.checkpoint();
   const r = pen.rng;
   const B = pen.dimension;
@@ -177,7 +173,7 @@ export function drawShield(pen: Pen): void {
 
   pen.clearCanvas();
 
-  const shape = pick(r, SHAPES);
+  const shape = parts?.shape ?? pick(r, SHAPES);
 
   const marginX = Math.max(1, Math.round(B * 0.11));
   const marginTop = Math.max(1, Math.round(B * 0.08));
@@ -191,13 +187,17 @@ export function drawShield(pen: Pen): void {
   const m: Metrics = { cx, top, H, maxHalf };
 
   // -- field: worked material, or painted heraldic blazon -------------------
-  const crystalField = r.float() < 0.06;
-  const painted = !crystalField && r.float() < 0.58;
+  // An explicit blazon pick forces the field into (or out of) "painted" mode
+  // so the choice actually shows — "plain" means the material field (matching
+  // what "plain" already meant when unpainted), anything else forces painted.
+  const explicitBlazon = parts?.blazon;
+  const crystalField = explicitBlazon ? false : r.float() < 0.06;
+  const painted = explicitBlazon ? explicitBlazon !== "plain" : !crystalField && r.float() < 0.58;
   const materialRamps: Ramp[] = [STEEL, BLUED, WOOD, WOOD, DARK, BONE, BRONZE, DARKIRON];
   const fieldA: Ramp = crystalField ? pickCrystal(r) : painted ? pickShieldPaint(r) : pick(r, materialRamps);
   let fieldB: Ramp = painted ? pickShieldPaint(r) : GOLD;
   if (painted && fieldB === fieldA) fieldB = pickShieldPaint(r);
-  const blazon: Blazon = painted ? pick(r, BLAZONS) : "plain";
+  const blazon: Blazon = painted ? (explicitBlazon && explicitBlazon !== "plain" ? explicitBlazon : pick(r, BLAZONS)) : "plain";
   const isWoodPlain = !painted && !crystalField && fieldA === WOOD;
 
   const rimMetalPool: Ramp[] = [GOLD, STEEL, GOLD, BRONZE, DARKIRON];
@@ -264,7 +264,7 @@ export function drawShield(pen: Pen): void {
   }
 
   // -- centrepiece emblem -----------------------------------------------------
-  const emblem = pick(r, EMBLEMS);
+  const emblem = parts?.emblem ?? pick(r, EMBLEMS);
   const centerY = top + H * (shape === "round" ? 0.5 : shape === "tower" ? 0.46 : 0.4);
   const center = new Vector(cx, centerY);
   const er = Math.min(maxHalf, H * 0.5) * (shape === "round" ? 0.6 : 0.5);

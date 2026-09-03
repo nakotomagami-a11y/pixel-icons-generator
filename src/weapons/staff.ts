@@ -1,5 +1,6 @@
 import type { Pen } from "../pen";
 import type { Color } from "../types";
+import type { StaffHead as Head, StaffShaft as Shaft, StaffParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorDarken, colorLerp, colorLighten, colorStr } from "../color";
 import { Rng } from "../rng";
@@ -15,12 +16,10 @@ import { WOOD, DARK, BONE, BLUED, GOLD, STEEL, pickGem } from "../palette";
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 
-type Head = "bare" | "claws" | "crescent" | "halo" | "wings" | "cluster" | "collar" | "loop";
 const HEADS: Head[] = ["bare", "claws", "claws", "crescent", "halo", "wings", "cluster", "collar", "collar", "loop", "loop"];
-type Shaft = "straight" | "twisted" | "wrapped" | "segmented";
 const SHAFTS: Shaft[] = ["straight", "twisted", "twisted", "wrapped", "segmented", "straight"];
 
-export function drawStaff(pen: Pen): void {
+export function drawStaff(pen: Pen, parts?: StaffParts): void {
   pen.rng.checkpoint();
   const r = pen.rng;
 
@@ -32,8 +31,8 @@ export function drawStaff(pen: Pen): void {
   const isWand = r.float() < 0.35;
   const gemRadius = (isWand ? r.rangeFloat(2.4, 3.4) : r.rangeFloat(3.6, 5.4)) * dscale;
   const haftMaxRadius = (isWand ? r.rangeFloat(0.9, 1.4) : r.rangeFloat(1.4, 2.2)) * dscale;
-  const head = pick(r, HEADS);
-  const shaft = pick(r, SHAFTS);
+  const head = parts?.head ?? pick(r, HEADS);
+  const shaft = parts?.shaft ?? pick(r, SHAFTS);
 
   const gemOrtho = bounds.h - 1 - Math.ceil(gemRadius * 1.25) - 1;
   const gemCenter = new Vector(gemOrtho, bounds.h - 1 - gemOrtho);
