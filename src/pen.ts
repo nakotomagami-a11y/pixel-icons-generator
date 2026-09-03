@@ -773,17 +773,27 @@ export class Pen {
     const orn = pickGuardAccent(r);
     const pommelColorLight = params.colorLight ?? orn.light;
     const pommelColorDark = params.colorDark ?? orn.shadow;
-    const pommelRadius = params.radius;
-    const shadowCenter = new Vector(0.5, 1).normalize().multiplyScalar(pommelRadius).addVector(params.center);
-    const highlightCenter = new Vector(-1, -1).normalize().multiplyScalar(pommelRadius * 0.7).addVector(params.center);
-    for (let x = Math.floor(params.center.x - pommelRadius); x <= Math.ceil(params.center.x + pommelRadius); x++) {
-      for (let y = Math.floor(params.center.y - pommelRadius); y <= Math.ceil(params.center.y + pommelRadius); y++) {
-        const radius = params.center.distanceTo(x, y);
-        if (radius <= pommelRadius) {
+    // `rx`/`ry` let this draw an ellipse (a flattened wheel pommel, an
+    // elongated scent-stopper) instead of only a circle; both default to
+    // `radius` so every pre-existing call site (a plain round knob/gem/rivet)
+    // is unaffected. `outerR` stands in for the old scalar `pommelRadius` in
+    // the shading math below.
+    const rx = params.radius;
+    const ry = params.radiusY ?? params.radius;
+    const outerR = Math.max(rx, ry);
+    const holeFrac = params.holeRadius ? params.holeRadius / outerR : 0;
+    const shadowCenter = new Vector(0.5, 1).normalize().multiplyScalar(outerR).addVector(params.center);
+    const highlightCenter = new Vector(-1, -1).normalize().multiplyScalar(outerR * 0.7).addVector(params.center);
+    for (let x = Math.floor(params.center.x - rx); x <= Math.ceil(params.center.x + rx); x++) {
+      for (let y = Math.floor(params.center.y - ry); y <= Math.ceil(params.center.y + ry); y++) {
+        // Normalized ellipse distance: <=1 is on/inside the outer boundary,
+        // exactly `distance/radius` when rx === ry (the circle case above).
+        const ell = Math.hypot((x - params.center.x) / rx, (y - params.center.y) / ry);
+        if (ell <= 1 && ell >= holeFrac) {
           const shadowDist = shadowCenter.distanceTo(x, y);
           const highlightDist = highlightCenter.distanceTo(x, y);
-          const darkAmt = 1 - Math.min(1, (0.8 * shadowDist) / pommelRadius);
-          const lightAmt = 1 - Math.min(1, highlightDist / pommelRadius);
+          const darkAmt = 1 - Math.min(1, (0.8 * shadowDist) / outerR);
+          const lightAmt = 1 - Math.min(1, highlightDist / outerR);
           this.ctx.fillStyle = colorStr(colorLighten(colorLerp(pommelColorLight, pommelColorDark, darkAmt), lightAmt));
           this.drawPixel(x, y);
         }
@@ -878,6 +888,12 @@ export interface RodParams {
 export interface OrnamentParams {
   center: Vector;
   radius: number;
+  /** Vertical radius, for a flattened/elongated ellipse (e.g. a wheel or
+   *  scent-stopper pommel). Default: same as `radius` (a circle). */
+  radiusY?: number;
+  /** Inner radius left unpainted, punching a hole through the middle (a ring
+   *  pommel). Default: 0 (solid). */
+  holeRadius?: number;
   colorLight?: Color;
   colorDark?: Color;
 }

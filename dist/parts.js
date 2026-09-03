@@ -20,6 +20,16 @@ export const BLADE_GUARD_OPTIONS = [
 export const BLADE_POMMEL_OPTIONS = [
     { value: "round", label: "Round" },
     { value: "gem", label: "Gem" },
+    { value: "faceted", label: "Faceted Gem" },
+    { value: "wheel", label: "Wheel" },
+    { value: "ring", label: "Ring" },
+    { value: "trefoil", label: "Trefoil" },
+    { value: "acorn", label: "Acorn" },
+    { value: "scentstopper", label: "Scent-Stopper" },
+    { value: "spike", label: "Spike" },
+    { value: "flanged", label: "Flanged" },
+    { value: "crown", label: "Crown" },
+    { value: "birdhead", label: "Bird-Head" },
     { value: "none", label: "None" },
 ];
 /** Knight-only for now — see `BladeParts.modification`'s doc comment. */

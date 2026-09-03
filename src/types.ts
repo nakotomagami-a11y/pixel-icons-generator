@@ -75,7 +75,12 @@ export type BladeProfile =
   | "flamberge" | "leaf" | "bowie" | "katana"
   | "dagger" | "barbed";
 export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";
-export type BladePommel = "round" | "gem" | "none";
+export type BladePommel =
+  | "round" | "gem" | "none"
+  // Distinct silhouettes, not just recolours of the round knob — historical
+  // pommel shapes so a sword's hilt reads as varied as its blade.
+  | "wheel" | "ring" | "trefoil" | "acorn" | "scentstopper"
+  | "spike" | "faceted" | "flanged" | "crown" | "birdhead";
 export type BladeModification = "none" | "serrated" | "notched" | "fullered" | "riveted" | "wavy";
 
 export type AxeHead = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd";
