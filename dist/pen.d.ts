@@ -208,6 +208,12 @@ export interface RodParams {
 export interface OrnamentParams {
     center: Vector;
     radius: number;
+    /** Vertical radius, for a flattened/elongated ellipse (e.g. a wheel or
+     *  scent-stopper pommel). Default: same as `radius` (a circle). */
+    radiusY?: number;
+    /** Inner radius left unpainted, punching a hole through the middle (a ring
+     *  pommel). Default: 0 (solid). */
+    holeRadius?: number;
     colorLight?: Color;
     colorDark?: Color;
 }

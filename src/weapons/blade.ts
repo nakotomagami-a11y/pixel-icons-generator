@@ -1,8 +1,9 @@
 import type { Pen, BladeStyle, CrossguardParams, CrossguardResults, OrnamentParams } from "../pen";
 import type { Rng } from "../rng";
-import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeModification, BladeParts } from "../types";
+import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeModification, BladeParts, Color } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
-import { pickGem, pickCrystal } from "../palette";
+import { pickGem, pickCrystal, pickGuardAccent } from "../palette";
+import { colorLerp, colorStr } from "../color";
 
 /**
  * Mix-and-match sword: a blade profile, a guard, a grip and a pommel are each
@@ -42,7 +43,14 @@ const PROFILES: Record<BladeProfile, Profile> = {
 const PROFILE_KEYS = Object.keys(PROFILES) as BladeProfile[];
 
 const GUARDS: Guard[] = ["bar", "bar", "swept", "wings", "disc", "none"];
-const POMMELS: Pommel[] = ["round", "gem", "none", "none", "none"];
+// Weighted so a random roll actually shows off the variety — historically
+// wider styles (wheel/ring/flanged/crown) get the same weight as the plain
+// round knob; "none" (bare capped grip) is kept as a rarer, deliberate look
+// rather than the majority outcome it used to be.
+const POMMELS: Pommel[] = [
+  "round", "round", "gem", "faceted", "wheel", "ring", "trefoil",
+  "acorn", "scentstopper", "spike", "flanged", "crown", "birdhead", "none",
+];
 
 // A base of one-off flourishes for the plain arming-sword shape — currently
 // knight-only (see `BladeParts.modification`'s doc comment). "none" is
@@ -91,6 +99,26 @@ function applyModification(style: BladeStyle, mod: BladeModification, dscale: nu
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const rangeIncl = (r: Rng, lo: number, hi: number) => r.range(lo, hi + 1);
 const norm = (x: number, y: number) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
+const rotate = (v: { x: number; y: number }, a: number) => ({
+  x: v.x * Math.cos(a) - v.y * Math.sin(a),
+  y: v.x * Math.sin(a) + v.y * Math.cos(a),
+});
+
+/** Small diamond/rhombus mark — same light-to-dark falloff as
+ *  `drawRoundOrnamentHelper` but Manhattan distance, so a faceted gem reads
+ *  as a cut stone rather than a ball. Local to the blade pommel (not a `Pen`
+ *  method) since it's the only caller. */
+function drawFacetedGem(pen: Pen, center: Vector, radius: number, light: Color, dark: Color): void {
+  for (let x = Math.floor(center.x - radius); x <= Math.ceil(center.x + radius); x++) {
+    for (let y = Math.floor(center.y - radius); y <= Math.ceil(center.y + radius); y++) {
+      const dist = Math.abs(x - center.x) + Math.abs(y - center.y);
+      if (dist <= radius) {
+        pen.ctx.fillStyle = colorStr(colorLerp(light, dark, dist / radius));
+        pen.drawPixel(x, y);
+      }
+    }
+  }
+}
 
 export function drawBlade(pen: Pen, parts?: BladeParts): void {
   pen.rng.checkpoint();
@@ -233,24 +261,128 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
     pen.drawRoundOrnamentHelper({ center: new Vector(gp.x, gp.y), radius: Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5)) });
   }
 
-  // Pommel
+  // Pommel — historical hilt-cap shapes, not just a recoloured ball. Most
+  // stay just under the (thin) grip radius so they never overpower the
+  // handle; a few genuinely wider builds (wheel/ring/flanged/crown) are
+  // allowed to overhang it a little, the same latitude the disc guard gets.
   if (pommel !== "none") {
-    // A pommel is a small knob flush with the grip's end — never a ball wider
-    // than the handle. Sized just under the (thin) grip radius.
     const pommelRadius = Math.max(1, gripRadius * 0.55);
-    const p: OrnamentParams = {
-      center: new Vector(Math.floor(pommelRadius + 1), Math.ceil(bounds.h - pommelRadius - 2)),
-      radius: pommelRadius,
-    };
-    if (pommel === "gem") {
+    const wideRadius = Math.min(gripRadius + 1.2, pommelRadius * 2.2);
+    // Halfway between the two — a knob body large enough that small
+    // appendages (a cap band, a hooked beak, a fan of prongs) survive
+    // `cleanSilhouette`'s orphan-pixel pruning and actually register at the
+    // 40–60px the app renders at, without sprouting into "wide" territory.
+    const midRadius = (pommelRadius + wideRadius) / 2;
+    const center = new Vector(Math.floor(pommelRadius + 1), Math.ceil(bounds.h - pommelRadius - 2));
+    const wideCenter = new Vector(Math.floor(wideRadius + 1), Math.ceil(bounds.h - wideRadius - 2));
+    const midCenter = new Vector(Math.floor(midRadius + 1), Math.ceil(bounds.h - midRadius - 2));
+    // Away from the blade, past the grip end — the axis any spike/prong/hook
+    // on a pommel points along (same direction the barbed thorns use above).
+    const back = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
+
+    if (pommel === "gem" || pommel === "faceted") {
       const g = pickGem(r);
-      p.colorLight = g.light;
-      p.colorDark = g.shadow;
-    } else if (guardColors) {
-      p.colorLight = guardColors.colorLight;
-      p.colorDark = guardColors.colorDark;
+      if (pommel === "gem") {
+        pen.drawRoundOrnamentHelper({ center, radius: pommelRadius, colorLight: g.light, colorDark: g.shadow });
+      } else {
+        // Same jewel colours as "gem" but a rhombus cut instead of a ball —
+        // reads as a genuinely different setting, not just a recolour.
+        drawFacetedGem(pen, center, pommelRadius * 1.3, g.light, g.shadow);
+      }
+    } else if (pommel === "round") {
+      const p: OrnamentParams = { center, radius: pommelRadius };
+      if (guardColors) {
+        p.colorLight = guardColors.colorLight;
+        p.colorDark = guardColors.colorDark;
+      }
+      pen.drawRoundOrnamentHelper(p);
+    } else {
+      // Every other style shares one metal accent — matching the guard's
+      // metal when there is one, otherwise a fresh accent pick — across the
+      // knob plus whatever prongs/flanges/hooks sit on it.
+      const metal = guardColors ?? (() => { const a = pickGuardAccent(r); return { colorLight: a.light, colorDark: a.shadow }; })();
+      const { colorLight: light, colorDark: dark } = metal;
+      switch (pommel) {
+        case "wheel":
+          // Flat wide disc flush with the grip end — the classic arming-sword
+          // "wheel pommel", clearly wider than tall.
+          pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius, radiusY: wideRadius * 0.6, colorLight: light, colorDark: dark });
+          break;
+        case "ring":
+          // A visible loop through the pommel — the historic ring pommel.
+          pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius, holeRadius: wideRadius * 0.5, colorLight: light, colorDark: dark });
+          break;
+        case "trefoil": {
+          // Three lobes clustered around the grip end — the Viking-age
+          // trilobate pommel. Sized off `midRadius` and spaced past their own
+          // radius so the cluster reads as three bumps, not one blob.
+          const lobeR = midRadius * 0.78;
+          for (const a of [0, (Math.PI * 2) / 3, -(Math.PI * 2) / 3]) {
+            const o = rotate(back, a);
+            pen.drawRoundOrnamentHelper({
+              center: new Vector(midCenter.x + o.x * lobeR * 1.35, midCenter.y + o.y * lobeR * 1.35),
+              radius: lobeR,
+              colorLight: light,
+              colorDark: dark,
+            });
+          }
+          break;
+        }
+        case "acorn": {
+          // A rounded body with a contrasting cap band near the neck — the
+          // historical acorn pommel. Bigger + a stronger offset than a plain
+          // round knob so the two-tone cap survives at tiny render sizes.
+          pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius, colorLight: light, colorDark: dark });
+          const cap = pickGuardAccent(r);
+          const capOffset = midRadius * 0.9;
+          pen.drawRoundOrnamentHelper({
+            center: new Vector(midCenter.x - back.x * capOffset, midCenter.y - back.y * capOffset),
+            radius: Math.max(1, midRadius * 0.7),
+            colorLight: cap.light,
+            colorDark: cap.shadow,
+          });
+          break;
+        }
+        case "scentstopper":
+          // A slim elongated capsule along the hilt axis — the Renaissance
+          // rapier "scent-stopper" pommel.
+          pen.drawRoundOrnamentHelper({ center, radius: pommelRadius * 0.75, radiusY: pommelRadius * 1.9, colorLight: light, colorDark: dark });
+          break;
+        case "spike":
+          // A tapered cone jutting straight off the grip end — a military
+          // spike pommel.
+          pen.fillCone(center.x, center.y, back.x, back.y, 0, pommelRadius * 2.4, pommelRadius * 0.9, light, dark);
+          break;
+        case "flanged":
+          // A small ball with radiating flanges — a miniature mace head
+          // capping the grip.
+          pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius * 0.7, colorLight: light, colorDark: dark });
+          for (let i = 0; i < 4; i++) {
+            const d = rotate(back, (i / 4) * Math.PI * 2);
+            pen.fillCone(wideCenter.x, wideCenter.y, d.x, d.y, wideRadius * 0.4, wideRadius * 0.85, wideRadius * 0.32, light, dark);
+          }
+          break;
+        case "crown":
+          // A small coronet — a ball with three points fanned toward the
+          // grip end, like a ceremonial crown pommel. Longer, chunkier prongs
+          // than a first pass so they clear `cleanSilhouette`'s pruning.
+          pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius * 0.8, colorLight: light, colorDark: dark });
+          for (const a of [-0.6, 0, 0.6]) {
+            const d = rotate(back, a);
+            pen.fillCone(midCenter.x, midCenter.y, d.x, d.y, midRadius * 0.3, midRadius * 1.5, midRadius * 0.45, light, dark);
+          }
+          break;
+        case "birdhead": {
+          // An asymmetric hooked cap — the "bird-head" pommel seen on
+          // sabers, curling to one side rather than sitting flush. A longer
+          // hook than a plain round knob's radius so the curl actually reads.
+          pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius * 0.85, colorLight: light, colorDark: dark });
+          const hook = rotate(back, 1.15);
+          pen.fillCone(midCenter.x, midCenter.y, hook.x, hook.y, midRadius * 0.5, midRadius * 1.8, midRadius * 0.6, light, dark);
+          break;
+        }
+      }
     }
-    pen.drawRoundOrnamentHelper(p);
   }
 
   pen.weather(r.floatLow()); // most blades lightly worn, a few battered

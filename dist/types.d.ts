@@ -67,7 +67,7 @@ export interface ShieldParts {
 }
 export type BladeProfile = "knight" | "broad" | "cleaver" | "rapier" | "flamberge" | "leaf" | "bowie" | "katana" | "dagger" | "barbed";
 export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";
-export type BladePommel = "round" | "gem" | "none";
+export type BladePommel = "round" | "gem" | "none" | "wheel" | "ring" | "trefoil" | "acorn" | "scentstopper" | "spike" | "faceted" | "flanged" | "crown" | "birdhead";
 export type BladeModification = "none" | "serrated" | "notched" | "fullered" | "riveted" | "wavy";
 export type AxeHead = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd";
 export type SpearHead = "leaf" | "pike" | "broadleaf" | "winged" | "glaive" | "harpoon" | "needle" | "partisan" | "forked";
