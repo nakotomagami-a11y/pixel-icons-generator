@@ -29,7 +29,11 @@ export function drawBlade(pen, parts) {
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const dscale = bounds.h / 32;
     pen.clearCanvas();
-    const prof = PROFILES[parts?.profile ?? pick(r, PROFILE_KEYS)];
+    // A persisted skill config can name a profile that's since been removed
+    // from the roster (e.g. an old "katana"/"saber" pick) — fall back to a
+    // random pick rather than crash on `PROFILES[undefined]`.
+    const requestedProfile = parts?.profile && parts.profile in PROFILES ? parts.profile : undefined;
+    const prof = PROFILES[requestedProfile ?? pick(r, PROFILE_KEYS)];
     const style = prof.makeStyle?.(r) ?? {};
     // ~12% of blades are an enchanted crystal (colour variety).
     if (r.float() < 0.12)
