@@ -62,20 +62,20 @@ export function drawAxe(pen: Pen): void {
   const sign = doubleSide ? 0 : 1;
 
   if (head === "crescent") {
-    // A tall bit with a concave cutting edge → two sweeping horns, still solidly
-    // socketed to the haft (no floating gap like the old polar arc). Depth kept
-    // close to the half-width (not much deeper) and the neck a real fraction of
-    // it, so the horns sweep rather than taper to needle points.
-    const halfC = r.rangeFloat(6, 8.5) * dscale;
+    // Same chunky solid bit as "broad" — wide, flat-capped, corner-rounded —
+    // with a shallow moon-shaped notch scooped out of just the centre of the
+    // edge (see the localized dip in drawFan) so it still reads as a crescent
+    // axe without needing the oversized reach the old two-horn shape did.
+    const halfC = r.rangeFloat(8, 11) * dscale;
     const cres: FanParams = {
-      neckTop: Math.max(1, halfC * 0.4),
-      neckBot: Math.max(1, halfC * 0.4),
+      neckTop: Math.max(1, halfC * 0.42),
+      neckBot: Math.max(1, halfC * 0.42),
       halfTop: halfC,
       halfBot: halfC,
-      depth: r.rangeFloat(9, 11) * dscale,
+      depth: r.rangeFloat(8, 11) * dscale,
       edgeBulge: 0.8,
       notch,
-      concave: r.rangeFloat(0.3, 0.45),
+      concave: r.rangeFloat(0.4, 0.6),
     };
     drawFan(pen, anchor, u, n, cres, metal, 1);
   } else {
@@ -228,11 +228,13 @@ function drawFan(pen: Pen, anchor: Vector, u: Vector, n: Vector, p: FanParams, m
   const B = pen.dimension;
   const crescent = !!p.concave && p.concave > 0;
   const socket = Math.max(p.neckTop, p.neckBot) + 1.5;
-  // Solid (non-crescent) bits: round only the two OUTER corners of the bit —
-  // the toe (near the haft top) and the heel/beard tip — into the flare curve.
-  // Doing this instead of an independent bulge-vs-flare cap avoids those two
-  // curves crossing at a hard angle, which is what turned the bit into a
-  // pointed flag/checkmark instead of a rounded axe head.
+  // Round the two OUTER corners of the bit — the toe (near the haft top) and
+  // the heel/beard tip — into the flare curve instead of capping the outward
+  // reach with an independent bulge/valley curve that shrinks at the sides.
+  // That independent cap is what crossed the flare curve at a hard angle and
+  // turned the bit into a pointed flag/checkmark; both the solid and crescent
+  // cap hit exactly `depth` at the extremes (sn = ±1), so the same rounding
+  // applies to both.
   const cornerT = Math.max(0, Math.min(p.depth, p.halfTop) * (1 - p.edgeBulge));
   const cornerB = Math.max(0, Math.min(p.depth, p.halfBot) * (1 - p.edgeBulge));
   for (let x = 0; x < B; x++) {
@@ -247,19 +249,22 @@ function drawFan(pen: Pen, anchor: Vector, u: Vector, n: Vector, p: FanParams, m
       const halfB = p.neckBot + (p.halfBot - p.neckBot) * Math.pow(flare, 0.85);
       if (s > halfT || s < -halfB) continue;
       const sn = s > 0 ? s / (p.halfTop || 1) : s / (p.halfBot || 1);
-      // Cutting edge cap: crescents hollow into a concave valley (two horns,
-      // by design); solid bits cap flat at full depth and get corner-rounded
-      // below instead, so the flare never has to cross a shrinking bulge.
-      let edgeMax = crescent ? p.depth * ((1 - p.concave!) + p.concave! * sn * sn) : p.depth;
-      // Solid fans fill from the neck; crescents are a thin blade hollowed on the
-      // inner side except for a socket column that keeps them attached to the haft.
-      const dInner = crescent && Math.abs(s) >= socket ? Math.min(edgeMax * 0.3, 1.8) : 0;
+      // Cutting edge cap: solid bits cap flat at full depth. Crescents cap flat
+      // too, EXCEPT a narrow dimple right at the centre (a moon-shaped notch) —
+      // earlier this dip was a parabola spanning the *entire* width, which
+      // (however shallow) made the whole bit sweep smoothly from one corner to
+      // the other like a scythe blade instead of reading as a chunky axe head
+      // with a notch. Localizing it keeps the bulk of the bit flat/chunky like
+      // every other head, with only the centre scooped out.
+      const CRESCENT_NOTCH_HALF = 0.32;
+      const notchT = crescent ? Math.max(0, 1 - Math.abs(sn) / CRESCENT_NOTCH_HALF) : 0;
+      let edgeMax = crescent ? p.depth * (1 - p.concave! * notchT) : p.depth;
       if (p.notch > 0) {
         const tri = Math.abs(((s / 3.2) % 2 + 2) % 2 - 1);
         edgeMax *= 1 - p.notch * (1 - tri);
       }
-      if (d > edgeMax || d < dInner) continue;
-      if (!crescent && p.notch === 0) {
+      if (d > edgeMax) continue;
+      if (p.notch === 0) {
         if (s > 0 && p.depth - d < cornerT && halfT - s < cornerT) {
           const cdx = p.depth - d;
           const cdy = halfT - s;
