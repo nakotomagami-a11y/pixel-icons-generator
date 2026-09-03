@@ -6,14 +6,8 @@ export const BLADE_PROFILE_OPTIONS = [
     { value: "flamberge", label: "Flamberge" },
     { value: "leaf", label: "Leaf Blade" },
     { value: "bowie", label: "Bowie" },
-    { value: "katana", label: "Katana" },
-    { value: "greatsword", label: "Greatsword" },
     { value: "estoc", label: "Estoc" },
-    { value: "sawblade", label: "Sawblade" },
     { value: "dagger", label: "Dagger" },
-    { value: "scimitar", label: "Scimitar" },
-    { value: "bigsaw", label: "Big Saw" },
-    { value: "spinesaw", label: "Spine Saw" },
     { value: "barbed", label: "Barbed" },
 ];
 export const BLADE_GUARD_OPTIONS = [
