@@ -18,6 +18,7 @@ interface Profile {
   hilt: [number, number]; // grip length range (base px)
   wide?: boolean; // broad base → force a guard so it doesn't sit on the pommel
   barbed?: boolean; // thorn spikes down both sides of the blade
+  guardPool?: Guard[]; // restrict the random guard pick to these (e.g. a rapier needs its ornate hand-guard)
   makeStyle?: (r: Rng) => BladeStyle;
 }
 
@@ -25,7 +26,12 @@ const PROFILES: Record<BladeProfile, Profile> = {
   knight: { radius: [3, 4], taper: 0.16, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0 }) },
   broad: { radius: [4, 5], taper: 0.2, hilt: [6, 9], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
   cleaver: { radius: [5, 6], taper: 0.26, hilt: [5, 8], wide: true, makeStyle: () => ({ widthAmp: 0, singleEdge: true }) },
-  rapier: { radius: [2, 2], taper: 0.1, hilt: [7, 11], makeStyle: () => ({ widthAmp: 0 }) },
+  // A rapier reads as a rapier from two things: a genuinely needle-thin blade
+  // that tapers along nearly its whole length (not a flat blade with a tiny
+  // pointed tip), and the ornate hand-guard — so its guard pick is restricted
+  // to guards that read as that (swept hilt, or a cup/disc guard), never a
+  // plain crossguard or none.
+  rapier: { radius: [1, 1], taper: 0.68, hilt: [7, 11], guardPool: ["swept", "swept", "disc"], makeStyle: () => ({ widthAmp: 0 }) },
   flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
   leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
   bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
@@ -61,7 +67,7 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
   const style = prof.makeStyle?.(r) ?? {};
   // ~12% of blades are an enchanted crystal (colour variety).
   if (r.float() < 0.12) style.metal = pickCrystal(r);
-  let guard = parts?.guard ?? pick(r, GUARDS);
+  let guard = parts?.guard ?? pick(r, prof.guardPool ?? GUARDS);
   // A broad blade's base overlaps the grip; without a crossguard it reads as a
   // slab sitting straight on the pommel. Force a real guard for wide profiles
   // — even over an explicit "none"/"disc" pick, since that's a rendering
