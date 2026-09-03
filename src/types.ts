@@ -74,7 +74,12 @@ export type BladeProfile =
   | "knight" | "broad" | "cleaver" | "rapier"
   | "flamberge" | "leaf" | "bowie" | "katana"
   | "dagger" | "barbed";
-export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";
+export type BladeGuard =
+  | "bar" | "swept" | "wings" | "disc" | "none"
+  // Historical hand-protection styles — distinct silhouettes, not just
+  // recolours/retunes of the plain crossguard.
+  | "spiked" | "hook" | "hourglass" | "langets" | "sidering"
+  | "trilobe" | "cup" | "starburst" | "knucklebow" | "basket";
 export type BladePommel =
   | "round" | "gem" | "none"
   // Distinct silhouettes, not just recolours of the round knob — historical
