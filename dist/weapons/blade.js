@@ -8,9 +8,9 @@ const PROFILES = {
     // A rapier reads as a rapier from two things: a genuinely needle-thin blade
     // that tapers along nearly its whole length (not a flat blade with a tiny
     // pointed tip), and the ornate hand-guard — so its guard pick is restricted
-    // to guards that read as that (swept hilt, or a cup/disc guard), never a
-    // plain crossguard or none.
-    rapier: { radius: [1, 1], taper: 0.68, hilt: [7, 11], guardPool: ["swept", "swept", "disc"], makeStyle: () => ({ widthAmp: 0 }) },
+    // to guards that read as that (swept hilt, a cup, a finger-ring, or a disc),
+    // never a plain crossguard or none.
+    rapier: { radius: [1, 1], taper: 0.68, hilt: [7, 11], guardPool: ["swept", "swept", "cup", "sidering", "disc"], makeStyle: () => ({ widthAmp: 0 }) },
     flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
     leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
     bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
@@ -19,7 +19,17 @@ const PROFILES = {
     barbed: { radius: [2, 3], taper: 0.2, hilt: [6, 9], barbed: true, makeStyle: () => ({ widthAmp: 0 }) },
 };
 const PROFILE_KEYS = Object.keys(PROFILES);
-const GUARDS = ["bar", "bar", "swept", "wings", "disc", "none"];
+// Weighted the same way as the pommel pool — a plain crossguard stays common
+// (weight 2) but "none" drops to a rare, deliberate pick instead of crowding
+// out the 10 new hand-protection styles.
+const GUARDS = [
+    "bar", "bar", "swept", "wings", "disc", "spiked", "hook", "hourglass",
+    "langets", "sidering", "trilobe", "cup", "starburst", "knucklebow", "basket", "none",
+];
+// Round/knob-shaped guards that don't span past a wide blade's base — forced
+// to "bar" for `wide` profiles (see the `prof.wide` check below), same as
+// "disc" always was.
+const ROUND_GUARDS = ["disc", "trilobe", "cup", "starburst"];
 // Weighted so a random roll actually shows off the variety — historically
 // wider styles (wheel/ring/flanged/crown) get the same weight as the plain
 // round knob; "none" (bare capped grip) is kept as a rarer, deliberate look
@@ -119,9 +129,9 @@ export function drawBlade(pen, parts) {
     let guard = parts?.guard ?? pick(r, prof.guardPool ?? GUARDS);
     // A broad blade's base overlaps the grip; without a crossguard it reads as a
     // slab sitting straight on the pommel. Force a real guard for wide profiles
-    // — even over an explicit "none"/"disc" pick, since that's a rendering
+    // — even over an explicit "none"/round-guard pick, since that's a rendering
     // artifact (slab-on-pommel), not a style choice worth honouring.
-    if (prof.wide && (guard === "none" || guard === "disc"))
+    if (prof.wide && (guard === "none" || ROUND_GUARDS.includes(guard)))
         guard = "bar";
     const pommel = parts?.pommel ?? pick(r, POMMELS);
     const twoHanded = parts?.twoHanded ?? r.float() < 0.22;
@@ -196,7 +206,26 @@ export function drawBlade(pen, parts) {
     // crossguard should span past it, not sit flush.
     let guardColors;
     const w = blade.startRadius;
-    if (guard === "bar" || guard === "swept" || guard === "wings") {
+    // `diagToPosition` (÷√2) matches the existing "disc" guard's anchor — keep
+    // using it for every round-family guard (disc/trilobe/cup/starburst) for
+    // consistency with that already-shipped placement. `drawCrossguardHelper`'s
+    // OWN internal anchor is different: it uses `positionDiag` (= `blade.
+    // startOrtho`) directly as a raw pixel coordinate, no ÷√2 — so anything
+    // meant to line up with the crossguard's actual rendered arms (a finial
+    // spike, a langet, a knuckle-bow) must use `xguardStart`, not `guardPos`,
+    // or it lands several px off from where the guard really is.
+    const guardPos = diagToPosition(blade.startOrtho, bounds);
+    const xguardStart = new Vector(blade.startOrtho, bounds.h - 1 - blade.startOrtho);
+    // Toward the hilt/pommel, and toward the blade tip — shared axis for every
+    // guard embellishment below (langets run up the blade; knuckle-bow/basket
+    // bars run down past the grip toward the pommel).
+    const toHilt = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
+    const toTip = { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
+    const CROSSGUARD_TYPES = [
+        "bar", "swept", "wings", "spiked", "hook", "hourglass",
+        "langets", "sidering", "knucklebow", "basket",
+    ];
+    if (CROSSGUARD_TYPES.includes(guard)) {
         // A crossguard is a THIN bar — thickness barely scales with blade width, or
         // thick + curved arms clump into a blob that reads as a ball at the base.
         const guardThick = Math.min(1.8, Math.max(1.2, w * 0.24));
@@ -206,24 +235,144 @@ export function drawBlade(pen, parts) {
             thickness: guardThick,
         };
         if (guard === "swept") {
-            // Gently curved-back quillons (not a tight curl).
+            // A visibly curved-back quillon — enough curl to read as swept at tiny
+            // sizes, short of "wings"'s heavy spiral.
             cfg.omegaChance = 0.35;
-            cfg.omegaAmount = Math.PI / 9;
+            cfg.omegaAmount = Math.PI / 7;
             cfg.halfLength = w * (1.6 + 0.8 * r.floatLow()) + 2;
         }
         else if (guard === "wings") {
-            // A WIDE, mostly-straight crossguard — heavy curl spiralled into a blob.
+            // A WIDE crossguard with a genuinely heavy curl. Previously this left
+            // `omegaAmount` at the same default a plain "bar" gets, so "wings" and
+            // "bar" rendered almost identically despite the "heavy curl spiralled
+            // into a blob" the comment promised — now the tips actually spiral.
             cfg.halfLength = w * (2.0 + 0.8 * r.floatLow()) + 2;
-            cfg.omegaChance = 0.12;
+            cfg.omegaChance = 0.5;
+            cfg.omegaAmount = Math.PI / 5;
             cfg.thickness = Math.min(2.0, guardThick + 0.3);
         }
+        else if (guard === "hook") {
+            // Short, tightly hooked quillons — a parrying-dagger/main-gauche guard.
+            cfg.halfLength = w * (1.1 + 0.4 * r.floatLow()) + 1.5;
+            cfg.omegaChance = 0.9;
+            cfg.omegaAmount = Math.PI / 4.5;
+        }
+        else if (guard === "hourglass" || guard === "spiked") {
+            // A straight bar (`omegaChance: 0`) — both embellishments below (a
+            // flared bead / a finial spike) are stamped exactly at each tip, which
+            // only stays predictable if the arms don't curl.
+            cfg.omegaChance = 0;
+            if (guard === "hourglass")
+                cfg.thickness = Math.max(1, guardThick * 0.7);
+        }
         guardColors = pen.drawCrossguardHelper(cfg);
+        // Embellishments — drawn in the guard's own metal so they read as part of
+        // the fitting, not a separate piece.
+        const { colorLight: light, colorDark: dark } = guardColors;
+        if (guard === "spiked" || guard === "hourglass") {
+            for (const a of [(-Math.PI * 3) / 4, Math.PI / 4]) {
+                const dir = { x: Math.cos(a), y: Math.sin(a) };
+                const tip = new Vector(xguardStart.x + dir.x * cfg.halfLength, xguardStart.y + dir.y * cfg.halfLength);
+                if (guard === "spiked") {
+                    // The bar's own end sharpens to a point — drawn as a taper ENDING
+                    // at the tip (not extending past it), so it stays within the arm's
+                    // own already-on-canvas reach instead of clipping off the edge.
+                    const spikeLen = Math.min(w * 0.9, cfg.halfLength * 0.4);
+                    const coneBase = new Vector(tip.x - dir.x * spikeLen, tip.y - dir.y * spikeLen);
+                    pen.fillCone(coneBase.x, coneBase.y, dir.x, dir.y, 0, spikeLen, Math.max(1, guardThick * 0.6), light, dark);
+                }
+                else {
+                    // A flared bead at each tip — the hourglass/spool silhouette.
+                    pen.drawRoundOrnamentHelper({ center: tip, radius: Math.max(1.2, guardThick * 1.1), colorLight: light, colorDark: dark });
+                }
+            }
+        }
+        else if (guard === "langets") {
+            // A thin strap hugging the blade's flat, continuing a short way past
+            // the guard toward the tip.
+            pen.fillCone(xguardStart.x, xguardStart.y, toTip.x, toTip.y, 0, w * 1.6 + 2, Math.max(1, w * 0.35), light, dark);
+        }
+        else if (guard === "sidering") {
+            // A finger-ring (pas d'âne) off to one side, protecting a finger hooked
+            // over the guard — a genuine rapier hilt feature.
+            const dir = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+            const ringR = Math.max(1.5, gripRadius + 1.5);
+            const reach = ringR + gripRadius * 0.5;
+            pen.drawRoundOrnamentHelper({
+                center: new Vector(xguardStart.x + dir.x * reach, xguardStart.y + dir.y * reach),
+                radius: ringR,
+                holeRadius: ringR * 0.55,
+                colorLight: light,
+                colorDark: dark,
+            });
+        }
+        else if (guard === "knucklebow" || guard === "basket") {
+            // A chain of beads running alongside the grip from the guard down
+            // toward the pommel corner — a knuckle-bow. "basket" repeats it at a
+            // few lateral offsets around the grip for a caged-hand impression.
+            // `xguardStart + toHilt * (blade.startOrtho * √2)` walks exactly to the
+            // canvas's bottom-left corner (where the pommel sits) — pure geometry,
+            // no dependency on the grip's own diag/ortho conversion quirks.
+            const beadR = Math.max(1, guardThick * 0.65);
+            const lateral = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+            const reachLen = blade.startOrtho * Math.SQRT2 * 0.85;
+            const lanes = guard === "basket" ? [1.4, 2.3, 3.2] : [1.8];
+            const steps = 5;
+            for (const lane of lanes) {
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const base = new Vector(xguardStart.x + toHilt.x * reachLen * t, xguardStart.y + toHilt.y * reachLen * t);
+                    const reach = lane * (gripRadius + 1);
+                    pen.drawRoundOrnamentHelper({
+                        center: new Vector(base.x + lateral.x * reach, base.y + lateral.y * reach),
+                        radius: beadR,
+                        colorLight: light,
+                        colorDark: dark,
+                    });
+                }
+            }
+        }
     }
     else if (guard === "disc") {
-        // A small round disc/cup guard — a knob just past the grip, absolutely
+        // A small round disc guard — a knob just past the grip, absolutely
         // capped so wide blades don't sprout a giant sphere at the base.
-        const gp = diagToPosition(blade.startOrtho, bounds);
-        pen.drawRoundOrnamentHelper({ center: new Vector(gp.x, gp.y), radius: Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5)) });
+        pen.drawRoundOrnamentHelper({ center: new Vector(guardPos.x, guardPos.y), radius: Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5)) });
+    }
+    else if (guard === "trilobe") {
+        // Three lobes clustered at the grip base — a wider, guard-scale cousin of
+        // the trefoil pommel.
+        const lobeR = Math.min(gripRadius + 1.6, Math.max(gripRadius + 0.8, w * 0.42));
+        const accent = pickGuardAccent(r);
+        for (const a of [0, (Math.PI * 2) / 3, -(Math.PI * 2) / 3]) {
+            const o = rotate(toHilt, a);
+            pen.drawRoundOrnamentHelper({
+                center: new Vector(guardPos.x + o.x * lobeR * 0.9, guardPos.y + o.y * lobeR * 0.9),
+                radius: lobeR,
+                colorLight: accent.light,
+                colorDark: accent.shadow,
+            });
+        }
+    }
+    else if (guard === "cup") {
+        // A full cup-hilt shell — noticeably bigger than "disc", with an inset
+        // lighter face for a concave-bowl highlight.
+        const outerR = Math.min(gripRadius + 3, Math.max(gripRadius + 2, w * 0.75));
+        const accent = pickGuardAccent(r);
+        const center = new Vector(guardPos.x, guardPos.y);
+        pen.drawRoundOrnamentHelper({ center, radius: outerR, colorLight: accent.light, colorDark: accent.shadow });
+        pen.drawRoundOrnamentHelper({ center, radius: outerR * 0.6, colorLight: accent.spec, colorDark: accent.light });
+    }
+    else if (guard === "starburst") {
+        // A small core with spikes radiating all around — a rondel/starburst
+        // guard, the mace-flanged cousin of the crossguard family.
+        const coreR = Math.min(gripRadius + 1.2, Math.max(gripRadius + 0.6, w * 0.35));
+        const accent = pickGuardAccent(r);
+        const center = new Vector(guardPos.x, guardPos.y);
+        pen.drawRoundOrnamentHelper({ center, radius: coreR, colorLight: accent.light, colorDark: accent.shadow });
+        for (let i = 0; i < 6; i++) {
+            const d = rotate(toHilt, (i / 6) * Math.PI * 2);
+            pen.fillCone(center.x, center.y, d.x, d.y, coreR * 0.5, coreR * 1.3, coreR * 0.4, accent.light, accent.shadow);
+        }
     }
     // Pommel — historical hilt-cap shapes, not just a recoloured ball. Most
     // stay just under the (thin) grip radius so they never overpower the

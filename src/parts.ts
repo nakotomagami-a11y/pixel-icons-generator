@@ -36,6 +36,16 @@ export const BLADE_GUARD_OPTIONS: PartOption<BladeGuard>[] = [
   { value: "swept", label: "Swept" },
   { value: "wings", label: "Wings" },
   { value: "disc", label: "Disc" },
+  { value: "spiked", label: "Spiked" },
+  { value: "hook", label: "Hook" },
+  { value: "hourglass", label: "Hourglass" },
+  { value: "langets", label: "Langets" },
+  { value: "sidering", label: "Side-Ring" },
+  { value: "trilobe", label: "Trilobe" },
+  { value: "cup", label: "Cup" },
+  { value: "starburst", label: "Starburst" },
+  { value: "knucklebow", label: "Knuckle-Bow" },
+  { value: "basket", label: "Basket" },
   { value: "none", label: "None" },
 ];
 export const BLADE_POMMEL_OPTIONS: PartOption<BladePommel>[] = [
