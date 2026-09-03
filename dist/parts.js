@@ -1,8 +1,6 @@
 export const BLADE_PROFILE_OPTIONS = [
     { value: "knight", label: "Knight" },
     { value: "broad", label: "Broadsword" },
-    { value: "saber", label: "Saber" },
-    { value: "falchion", label: "Falchion" },
     { value: "cleaver", label: "Cleaver" },
     { value: "rapier", label: "Rapier" },
     { value: "flamberge", label: "Flamberge" },

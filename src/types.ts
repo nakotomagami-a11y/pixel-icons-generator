@@ -60,7 +60,7 @@ export interface ShieldParts {
 }
 
 export type BladeProfile =
-  | "knight" | "broad" | "saber" | "falchion" | "cleaver" | "rapier"
+  | "knight" | "broad" | "cleaver" | "rapier"
   | "flamberge" | "leaf" | "bowie" | "katana" | "greatsword" | "estoc"
   | "sawblade" | "dagger" | "scimitar" | "bigsaw" | "spinesaw" | "barbed";
 export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none";

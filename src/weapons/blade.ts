@@ -7,8 +7,8 @@ import { pickGem, pickCrystal } from "../palette";
 /**
  * Mix-and-match sword: a blade profile, a guard, a grip and a pommel are each
  * picked (mostly) independently so the same generator yields knightly swords,
- * sabers, cleavers, rapiers, falchions and flamberges with a variety of hilts —
- * the "copy blades + handles and mix them" brief, done procedurally rather than
+ * cleavers, rapiers, katanas and flamberges with a variety of hilts — the
+ * "copy blades + handles and mix them" brief, done procedurally rather than
  * by copying the reference sheet's pixels.
  */
 
@@ -24,8 +24,6 @@ interface Profile {
 const PROFILES: Record<BladeProfile, Profile> = {
   knight: { radius: [3, 4], taper: 0.16, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0 }) },
   broad: { radius: [4, 5], taper: 0.2, hilt: [6, 9], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
-  saber: { radius: [3, 4], taper: 0.3, hilt: [6, 9], makeStyle: () => ({ curve: Math.PI / 108, curveDir: 1, widthAmp: 0, singleEdge: true }) },
-  falchion: { radius: [4, 5], taper: 0.24, hilt: [6, 8], makeStyle: () => ({ curve: Math.PI / 130, curveDir: 1, widthAmp: 0, singleEdge: true }) },
   cleaver: { radius: [5, 6], taper: 0.26, hilt: [5, 8], wide: true, makeStyle: () => ({ widthAmp: 0, singleEdge: true }) },
   rapier: { radius: [2, 2], taper: 0.1, hilt: [7, 11], makeStyle: () => ({ widthAmp: 0 }) },
   flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
