@@ -413,18 +413,13 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
     }
   }
 
-  // Pommel — historical hilt-cap shapes, not just a recoloured ball.
+  // Pommel — historical hilt-cap shapes, not just a recoloured ball. Most
+  // stay just under the (thin) grip radius so they never overpower the
+  // handle; a few genuinely wider builds (wheel/ring/flanged/crown) are
+  // allowed to overhang it a little, the same latitude the disc guard gets.
   if (pommel !== "none") {
-    // Sized off `featureR` — the disc guard's own radius formula, the one
-    // shape in this file already proven to read clearly at the app's real
-    // 40-60px native render size. The previous constants here (`gripRadius *
-    // 0.55` etc., ~1.1px) were tuned by eyeballing artificially 9-12x-zoomed
-    // corner crops, which made a 1-2px feature look bold — at real size they
-    // were indistinguishable from each other and from "none" (same mistake,
-    // same fix, as the guard embellishments; see NEXT_SESSION.md).
-    const featureR = Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5));
-    const pommelRadius = featureR;
-    const wideRadius = featureR * 1.3;
+    const pommelRadius = Math.max(1, gripRadius * 0.55);
+    const wideRadius = Math.min(gripRadius + 1.2, pommelRadius * 2.2);
     // Halfway between the two — a knob body large enough that small
     // appendages (a cap band, a hooked beak, a fan of prongs) survive
     // `cleanSilhouette`'s orphan-pixel pruning and actually register at the
