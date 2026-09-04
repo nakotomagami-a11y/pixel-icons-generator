@@ -217,10 +217,18 @@ export function drawBlade(pen, parts) {
     const guardPos = diagToPosition(blade.startOrtho, bounds);
     const xguardStart = new Vector(blade.startOrtho, bounds.h - 1 - blade.startOrtho);
     // Toward the hilt/pommel, and toward the blade tip — shared axis for every
-    // guard embellishment below (langets run up the blade; knuckle-bow/basket
+    // guard embellishment below (langets sit up the blade; knuckle-bow/basket
     // bars run down past the grip toward the pommel).
     const toHilt = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
     const toTip = { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
+    // Every embellishment ball below is sized off this — the exact "disc guard"
+    // formula, since that's the one shape already proven to read clearly at the
+    // app's real 40-60px render size. An early pass sized finials/rings/beads
+    // off `guardThick` (~1.2-1.8px) instead — invisible at real size, only
+    // "visible" in an artificially 9-12x-zoomed verification crop. Never trust
+    // a zoomed crop alone for "is this discernible" — always check a natural-
+    // scale, unscaled render first.
+    const featureR = Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5));
     const CROSSGUARD_TYPES = [
         "bar", "swept", "wings", "spiked", "hook", "hourglass",
         "langets", "sidering", "knucklebow", "basket",
@@ -259,8 +267,8 @@ export function drawBlade(pen, parts) {
         }
         else if (guard === "hourglass" || guard === "spiked") {
             // A straight bar (`omegaChance: 0`) — both embellishments below (a
-            // flared bead / a finial spike) are stamped exactly at each tip, which
-            // only stays predictable if the arms don't curl.
+            // flared bead / a ball-tipped finial) are stamped exactly at each tip,
+            // which only stays predictable if the arms don't curl.
             cfg.omegaChance = 0;
             if (guard === "hourglass")
                 cfg.thickness = Math.max(1, guardThick * 0.7);
@@ -270,54 +278,55 @@ export function drawBlade(pen, parts) {
         // the fitting, not a separate piece.
         const { colorLight: light, colorDark: dark } = guardColors;
         if (guard === "spiked" || guard === "hourglass") {
+            // Both stamp a ball at each quillon tip — differentiated by relative
+            // size (spiked's is a smaller, harder knob; hourglass's is bigger, a
+            // genuine flared bulb) so the two don't collapse into the same shape.
+            const ballR = guard === "spiked" ? featureR * 0.55 : featureR * 0.9;
             for (const a of [(-Math.PI * 3) / 4, Math.PI / 4]) {
                 const dir = { x: Math.cos(a), y: Math.sin(a) };
                 const tip = new Vector(xguardStart.x + dir.x * cfg.halfLength, xguardStart.y + dir.y * cfg.halfLength);
-                if (guard === "spiked") {
-                    // The bar's own end sharpens to a point — drawn as a taper ENDING
-                    // at the tip (not extending past it), so it stays within the arm's
-                    // own already-on-canvas reach instead of clipping off the edge.
-                    const spikeLen = Math.min(w * 0.9, cfg.halfLength * 0.4);
-                    const coneBase = new Vector(tip.x - dir.x * spikeLen, tip.y - dir.y * spikeLen);
-                    pen.fillCone(coneBase.x, coneBase.y, dir.x, dir.y, 0, spikeLen, Math.max(1, guardThick * 0.6), light, dark);
-                }
-                else {
-                    // A flared bead at each tip — the hourglass/spool silhouette.
-                    pen.drawRoundOrnamentHelper({ center: tip, radius: Math.max(1.2, guardThick * 1.1), colorLight: light, colorDark: dark });
-                }
+                pen.drawRoundOrnamentHelper({ center: tip, radius: ballR, colorLight: light, colorDark: dark });
             }
         }
         else if (guard === "langets") {
-            // A thin strap hugging the blade's flat, continuing a short way past
-            // the guard toward the tip.
-            pen.fillCone(xguardStart.x, xguardStart.y, toTip.x, toTip.y, 0, w * 1.6 + 2, Math.max(1, w * 0.35), light, dark);
+            // A short, wide flared collar flush against the blade's base — reads as
+            // a distinct fitting plate, not a thin line that blends into the blade.
+            const collarCenter = new Vector(xguardStart.x + toTip.x * featureR * 0.6, xguardStart.y + toTip.y * featureR * 0.6);
+            pen.drawRoundOrnamentHelper({
+                center: collarCenter,
+                radius: featureR * 1.1,
+                radiusY: featureR * 0.55,
+                colorLight: light,
+                colorDark: dark,
+            });
         }
         else if (guard === "sidering") {
             // A finger-ring (pas d'âne) off to one side, protecting a finger hooked
             // over the guard — a genuine rapier hilt feature.
             const dir = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
-            const ringR = Math.max(1.5, gripRadius + 1.5);
+            const ringR = featureR * 1.1;
             const reach = ringR + gripRadius * 0.5;
             pen.drawRoundOrnamentHelper({
                 center: new Vector(xguardStart.x + dir.x * reach, xguardStart.y + dir.y * reach),
                 radius: ringR,
-                holeRadius: ringR * 0.55,
+                holeRadius: ringR * 0.5,
                 colorLight: light,
                 colorDark: dark,
             });
         }
         else if (guard === "knucklebow" || guard === "basket") {
-            // A chain of beads running alongside the grip from the guard down
-            // toward the pommel corner — a knuckle-bow. "basket" repeats it at a
-            // few lateral offsets around the grip for a caged-hand impression.
+            // A run of large beads alongside the grip from the guard down toward
+            // the pommel corner — a knuckle-bow. "basket" repeats it at a couple
+            // more lateral offsets for a caged-hand impression. Few, BIG beads
+            // (not many tiny ones) so it reads as a deliberate bar, not noise.
             // `xguardStart + toHilt * (blade.startOrtho * √2)` walks exactly to the
             // canvas's bottom-left corner (where the pommel sits) — pure geometry,
             // no dependency on the grip's own diag/ortho conversion quirks.
-            const beadR = Math.max(1, guardThick * 0.65);
+            const beadR = featureR * 0.65;
             const lateral = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
-            const reachLen = blade.startOrtho * Math.SQRT2 * 0.85;
-            const lanes = guard === "basket" ? [1.4, 2.3, 3.2] : [1.8];
-            const steps = 5;
+            const reachLen = blade.startOrtho * Math.SQRT2 * 0.8;
+            const lanes = guard === "basket" ? [1.3, 2.6] : [1.6];
+            const steps = 2;
             for (const lane of lanes) {
                 for (let i = 0; i <= steps; i++) {
                     const t = i / steps;
@@ -363,15 +372,17 @@ export function drawBlade(pen, parts) {
         pen.drawRoundOrnamentHelper({ center, radius: outerR * 0.6, colorLight: accent.spec, colorDark: accent.light });
     }
     else if (guard === "starburst") {
-        // A small core with spikes radiating all around — a rondel/starburst
-        // guard, the mace-flanged cousin of the crossguard family.
-        const coreR = Math.min(gripRadius + 1.2, Math.max(gripRadius + 0.6, w * 0.35));
+        // A core with spikes radiating all around — a rondel/starburst guard,
+        // the mace-flanged cousin of the crossguard family. Core matches
+        // `featureR` (the disc guard's own proven-visible size) so the spikes
+        // read as an addition ON TOP of a disc-sized knob, not the whole feature.
+        const coreR = featureR * 0.75;
         const accent = pickGuardAccent(r);
         const center = new Vector(guardPos.x, guardPos.y);
         pen.drawRoundOrnamentHelper({ center, radius: coreR, colorLight: accent.light, colorDark: accent.shadow });
         for (let i = 0; i < 6; i++) {
             const d = rotate(toHilt, (i / 6) * Math.PI * 2);
-            pen.fillCone(center.x, center.y, d.x, d.y, coreR * 0.5, coreR * 1.3, coreR * 0.4, accent.light, accent.shadow);
+            pen.fillCone(center.x, center.y, d.x, d.y, coreR * 0.6, coreR * 1.5, coreR * 0.45, accent.light, accent.shadow);
         }
     }
     // Pommel — historical hilt-cap shapes, not just a recoloured ball. Most
