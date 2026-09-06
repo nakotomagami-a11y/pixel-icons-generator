@@ -1,23 +1,27 @@
-import type { Pen, BladeStyle, CrossguardParams, CrossguardResults, OrnamentParams } from "../pen";
+import type { Pen, BladeStyle, CrossguardResults, OrnamentParams } from "../pen";
 import type { Rng } from "../rng";
 import type { BladeProfile, BladeGuard as Guard, BladePommel as Pommel, BladeModification, BladeParts, Color } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
-import { pickGem, pickCrystal, pickGuardAccent } from "../palette";
+import { pickGem, pickCrystal, pickGuardAccent, FIRE_TEMPERED } from "../palette";
 import { colorLerp, colorStr } from "../color";
 
 /**
- * Mix-and-match sword: a blade profile, a guard, a grip and a pommel are each
- * picked (mostly) independently so the same generator yields knightly swords,
- * cleavers, rapiers and flamberges with a variety of hilts — the
- * "copy blades + handles and mix them" brief, done procedurally rather than
- * by copying the reference sheet's pixels.
+ * Mix-and-match sword: a blade profile, a guard, a grip, a pommel and a blade
+ * decoration are each picked (mostly) independently so the same generator
+ * yields knightly swords, cleavers, rapiers and flamberges with a variety of
+ * hilts.
+ *
+ * Guards are EXPLICIT geometric constructions (a bar, angled arms, a plate, a
+ * ring, a dome…) rather than retunes of one wandering crossguard — the old
+ * omega-curl approach made bar/swept/wings/hook near-identical at the app's
+ * real 40–60px render size.
  */
 
 interface Profile {
   radius: [number, number]; // blade half-width range (base px)
   taper: number; // 0 = blunt tip, →1 = needle
   hilt: [number, number]; // grip length range (base px)
-  wide?: boolean; // broad base → force a guard so it doesn't sit on the pommel
+  wide?: boolean; // broad base → force a spanning guard so it doesn't sit on the pommel
   barbed?: boolean; // thorn spikes down both sides of the blade
   guardPool?: Guard[]; // restrict the random guard pick to these (e.g. a rapier needs its ornate hand-guard)
   makeStyle?: (r: Rng) => BladeStyle;
@@ -28,11 +32,9 @@ const PROFILES: Record<BladeProfile, Profile> = {
   broad: { radius: [4, 5], taper: 0.2, hilt: [6, 9], wide: true, makeStyle: () => ({ widthAmp: 0, fuller: true }) },
   cleaver: { radius: [5, 6], taper: 0.26, hilt: [5, 8], wide: true, makeStyle: () => ({ widthAmp: 0, singleEdge: true }) },
   // A rapier reads as a rapier from two things: a genuinely needle-thin blade
-  // that tapers along nearly its whole length (not a flat blade with a tiny
-  // pointed tip), and the ornate hand-guard — so its guard pick is restricted
-  // to guards that read as that (swept hilt, a cup, a finger-ring, or a disc),
-  // never a plain crossguard or none.
-  rapier: { radius: [1, 1], taper: 0.68, hilt: [7, 11], guardPool: ["swept", "swept", "cup", "sidering", "disc"], makeStyle: () => ({ widthAmp: 0 }) },
+  // that tapers along nearly its whole length, and the ornate hand-guard — so
+  // its guard pick is restricted to guards that read as that.
+  rapier: { radius: [1, 1], taper: 0.68, hilt: [7, 11], guardPool: ["swept", "swept", "cup", "ring", "shell", "knucklebow"], makeStyle: () => ({ widthAmp: 0 }) },
   flamberge: { radius: [3, 3], taper: 0.18, hilt: [6, 9], makeStyle: () => ({ wave: 0.22, waveLen: 8, widthAmp: 0 }) },
   leaf: { radius: [2, 3], taper: 0.34, hilt: [6, 9], makeStyle: () => ({ widthAmp: 0, bulge: 0.55 }) },
   bowie: { radius: [3, 4], taper: 0.14, hilt: [6, 8], makeStyle: () => ({ widthAmp: 0, clip: 0.3, singleEdge: true }) },
@@ -42,38 +44,47 @@ const PROFILES: Record<BladeProfile, Profile> = {
 };
 const PROFILE_KEYS = Object.keys(PROFILES) as BladeProfile[];
 
-// Weighted the same way as the pommel pool — a plain crossguard stays common
-// (weight 2) but "none" drops to a rare, deliberate pick instead of crowding
-// out the 10 new hand-protection styles.
+// A plain crossbar stays common (weight 2); "none" is a rare, deliberate pick.
 const GUARDS: Guard[] = [
-  "bar", "bar", "swept", "wings", "disc", "spiked", "hook", "hourglass",
-  "langets", "sidering", "trilobe", "cup", "starburst", "knucklebow", "basket", "none",
+  "bar", "bar", "vee", "swept", "winged", "balled", "spiked",
+  "oval", "ring", "cup", "shell", "plate", "knucklebow", "none",
 ];
-// Round/knob-shaped guards that don't span past a wide blade's base — forced
-// to "bar" for `wide` profiles (see the `prof.wide` check below), same as
-// "disc" always was.
-const ROUND_GUARDS: Guard[] = ["disc", "trilobe", "cup", "starburst"];
-// Weighted so a random roll actually shows off the variety — historically
-// wider styles (wheel/ring/flanged/crown) get the same weight as the plain
-// round knob; "none" (bare capped grip) is kept as a rarer, deliberate look
-// rather than the majority outcome it used to be.
+// Guards that don't work on a wide blade's base — compact/round ones don't
+// span past it, and angled-arm ones overlap into the broad steel — forced to
+// a spanning straight-bar-family guard for `wide` profiles.
+const ROUND_GUARDS: Guard[] = ["ring", "cup", "shell", "plate", "vee", "swept", "knucklebow"];
+/** Legacy → current mapping for persisted configs from the old guard set. */
+const LEGACY_GUARDS: Record<string, Guard> = {
+  wings: "winged",
+  disc: "oval",
+  hook: "swept",
+  hourglass: "balled",
+  langets: "bar",
+  sidering: "ring",
+  trilobe: "shell",
+  starburst: "spiked",
+  basket: "knucklebow",
+};
 const POMMELS: Pommel[] = [
   "round", "round", "gem", "faceted", "wheel", "ring", "trefoil",
-  "acorn", "scentstopper", "spike", "flanged", "crown", "birdhead", "none",
+  "acorn", "scentstopper", "spike", "flanged", "crown", "birdhead", "crescent", "none",
 ];
 
-// A base of one-off flourishes for the plain arming-sword shape — currently
-// knight-only (see `BladeParts.modification`'s doc comment). "none" is
-// weighted 2x so most random rolls stay a clean blade; the flourish is a
-// deliberate pick, not the common case.
-const MODIFICATIONS: BladeModification[] = ["none", "none", "serrated", "notched", "fullered", "riveted", "wavy"];
+// Blade decorations, applicable to EVERY profile. "none" weighted heavily so
+// most random rolls stay a clean blade; a decoration is a deliberate accent,
+// not the common case.
+const MODIFICATIONS: BladeModification[] = [
+  "none", "none", "none", "none", "none", "none", "none", "none",
+  "serrated", "notched", "fullered", "riveted", "wavy", "fireTempered",
+  "runes", "gems", "etched",
+];
+/** Legacy value from the WIP era. */
+const LEGACY_MODIFICATIONS: Record<string, BladeModification> = { diamond: "etched" };
 
 /** Merge a modification's style deltas onto the profile's base style. Only
- *  the shape-affecting knobs `drawBladeHelper` already understands — no new
- *  rendering primitives needed. `dscale` scales `serrate`/`serratePeriod`
- *  ourselves — unlike `waveLen` (scaled internally by `drawBladeHelper`),
- *  serrations are applied in raw render pixels, so left unscaled they shrink
- *  to invisible on larger icons. */
+ *  the shape-affecting knobs `drawBladeHelper` already understands. `dscale`
+ *  scales `serrate`/`serratePeriod` — unlike `waveLen` (scaled internally by
+ *  `drawBladeHelper`), serrations are applied in raw render pixels. */
 function applyModification(style: BladeStyle, mod: BladeModification, dscale: number): void {
   switch (mod) {
     case "serrated":
@@ -93,16 +104,23 @@ function applyModification(style: BladeStyle, mod: BladeModification, dscale: nu
       style.fuller = true;
       break;
     case "wavy":
-      // Gentler than the dedicated `flamberge` profile's wave (0.22/8) — this
-      // is a knight blade with a hint of ripple, not a full kris. `wave` is a
-      // radian amplitude (scale-invariant by design); `waveLen` gets *dscale
-      // internally, same as `flamberge`'s unscaled 8.
+      // Gentler than the dedicated `flamberge` profile's wave (0.22/8) — a
+      // hint of ripple, not a full kris.
       style.wave = 0.16;
       style.waveLen = 7;
       break;
+    case "fireTempered":
+      // A heat-quenched blade: dark red base fading to hot yellow-white at
+      // the tip — the hilt→tip gradient the helper already draws is exactly
+      // the effect; only the ramp changes.
+      style.metal = FIRE_TEMPERED;
+      break;
     case "riveted":
+    case "runes":
+    case "gems":
+    case "etched":
     case "none":
-      break; // riveted is a post-draw stamp, see drawBlade
+      break; // post-draw stamps, see drawBlade
   }
 }
 
@@ -116,8 +134,7 @@ const rotate = (v: { x: number; y: number }, a: number) => ({
 
 /** Small diamond/rhombus mark — same light-to-dark falloff as
  *  `drawRoundOrnamentHelper` but Manhattan distance, so a faceted gem reads
- *  as a cut stone rather than a ball. Local to the blade pommel (not a `Pen`
- *  method) since it's the only caller. */
+ *  as a cut stone rather than a ball. */
 function drawFacetedGem(pen: Pen, center: Vector, radius: number, light: Color, dark: Color): void {
   for (let x = Math.floor(center.x - radius); x <= Math.ceil(center.x + radius); x++) {
     for (let y = Math.floor(center.y - radius); y <= Math.ceil(center.y + radius); y++) {
@@ -126,6 +143,47 @@ function drawFacetedGem(pen: Pen, center: Vector, radius: number, light: Color, 
         pen.ctx.fillStyle = colorStr(colorLerp(light, dark, dist / radius));
         pen.drawPixel(x, y);
       }
+    }
+  }
+}
+
+/**
+ * A straight beveled bar between two points: every pixel within `half` of the
+ * segment, shaded across its thickness (lit toward the blade tip side). The
+ * workhorse for the whole crossguard family — deterministic geometry, no
+ * wandering integrator, so every guard style lands exactly where intended.
+ */
+function fillBar(
+  pen: Pen,
+  x0: number, y0: number, x1: number, y1: number,
+  half: number,
+  light: Color, dark: Color,
+  litDir: { x: number; y: number },
+): void {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const minX = Math.max(0, Math.floor(Math.min(x0, x1) - half - 1));
+  const maxX = Math.min(pen.dimension - 1, Math.ceil(Math.max(x0, x1) + half + 1));
+  const minY = Math.max(0, Math.floor(Math.min(y0, y1) - half - 1));
+  const maxY = Math.min(pen.dimension - 1, Math.ceil(Math.max(y0, y1) + half + 1));
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const px = x - x0;
+      const py = y - y0;
+      let t = (px * ux + py * uy);
+      t = Math.max(0, Math.min(len, t));
+      const cx = x0 + ux * t;
+      const cy = y0 + uy * t;
+      const d = Math.hypot(x - cx, y - cy);
+      if (d > half) continue;
+      // Bevel: lit on the blade-tip side of the bar's axis, shadowed opposite.
+      const side = ((x - cx) * litDir.x + (y - cy) * litDir.y) / (half || 1);
+      const shade = 0.65 + 0.35 * Math.max(-1, Math.min(1, side)) - 0.25 * (d / half) * (side < 0 ? 1 : 0);
+      pen.ctx.fillStyle = colorStr(colorLerp(dark, light, Math.max(0, Math.min(1, shade))));
+      pen.drawPixel(x, y);
     }
   }
 }
@@ -139,31 +197,39 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
 
   pen.clearCanvas();
 
-  // A persisted skill config can name a profile that's since been removed or
-  // renamed (e.g. an old "saber"/"estoc" pick) — fall back to a random pick
-  // rather than crash on `PROFILES[undefined]`.
+  // A persisted skill config can name a value that's since been removed or
+  // renamed — map legacy names, otherwise fall back to a random pick.
   const requestedProfile = parts?.profile && parts.profile in PROFILES ? parts.profile : undefined;
   const profileKey = requestedProfile ?? pick(r, PROFILE_KEYS);
   const prof = PROFILES[profileKey];
   const style = prof.makeStyle?.(r) ?? {};
   // ~12% of blades are an enchanted crystal (colour variety).
   if (r.float() < 0.12) style.metal = pickCrystal(r);
-  // Modification is currently knight-only (see `BladeParts.modification`'s
-  // doc comment) — other profiles already carry a strong shape identity of
-  // their own, so a random pick still rolls even if a stale/foreign value is
-  // set (e.g. leftover from switching Profile away from Knight in the UI).
+
+  const requestedMod = parts?.modification as string | undefined;
   const modification: BladeModification =
-    profileKey === "knight"
-      ? (parts?.modification && MODIFICATIONS.includes(parts.modification) ? parts.modification : pick(r, MODIFICATIONS))
-      : "none";
+    requestedMod && MODIFICATIONS.includes(requestedMod as BladeModification)
+      ? (requestedMod as BladeModification)
+      : requestedMod && requestedMod in LEGACY_MODIFICATIONS
+        ? LEGACY_MODIFICATIONS[requestedMod]!
+        : pick(r, MODIFICATIONS);
   applyModification(style, modification, dscale);
-  let guard = parts?.guard ?? pick(r, prof.guardPool ?? GUARDS);
-  // A broad blade's base overlaps the grip; without a crossguard it reads as a
-  // slab sitting straight on the pommel. Force a real guard for wide profiles
-  // — even over an explicit "none"/round-guard pick, since that's a rendering
-  // artifact (slab-on-pommel), not a style choice worth honouring.
+
+  const requestedGuard = parts?.guard as string | undefined;
+  let guard: Guard =
+    requestedGuard && GUARDS.includes(requestedGuard as Guard)
+      ? (requestedGuard as Guard)
+      : requestedGuard && requestedGuard in LEGACY_GUARDS
+        ? LEGACY_GUARDS[requestedGuard]!
+        : pick(r, prof.guardPool ?? GUARDS);
+  // A broad blade's base overlaps the grip; without a spanning crossguard it
+  // reads as a slab sitting straight on the pommel. Force one for wide
+  // profiles — even over an explicit compact-guard pick, since that's a
+  // rendering artifact (slab-on-pommel), not a style choice worth honouring.
   if (prof.wide && (guard === "none" || ROUND_GUARDS.includes(guard))) guard = "bar";
-  const pommel = parts?.pommel ?? pick(r, POMMELS);
+
+  const requestedPommel = parts?.pommel;
+  const pommel: Pommel = requestedPommel && POMMELS.includes(requestedPommel) ? requestedPommel : pick(r, POMMELS);
   const twoHanded = parts?.twoHanded ?? r.float() < 0.22;
 
   const startRadius = Math.ceil(rangeIncl(r, prof.radius[0], prof.radius[1]) * dscale);
@@ -171,12 +237,9 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
   const rawHiltLength =
     Math.ceil(rangeIncl(r, prof.hilt[0], prof.hilt[1]) * dscale) +
     (twoHanded ? Math.ceil(rangeIncl(r, 3, 6) * dscale) : 0);
-  // Hard cap the grip at a fixed share of the blade's total reach (pommel to
-  // tip) — a long profile hilt range stacked with the two-handed bonus could
-  // otherwise eat up to half the icon as handle. The blade itself grows to
-  // fill whatever's left of the canvas diagonal past pommel+hilt+guard (see
-  // `drawBladeHelper`), so capping the grip directly guarantees it stays a
-  // minor fraction of the whole weapon regardless of profile/two-handed roll.
+  // Hard cap the grip at a fixed share of the blade's total reach — a long
+  // profile hilt range stacked with the two-handed bonus could otherwise eat
+  // up to half the icon as handle.
   const maxHiltLength = Math.round(pen.dimension * Math.SQRT2 * 0.22);
   const hiltLength = Math.min(rawHiltLength, maxHiltLength);
   const xguardWidth = guard === "none" ? Math.ceil(dscale) : Math.ceil(rangeIncl(r, 1, 3) * dscale);
@@ -190,10 +253,8 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
   });
 
   // Barbed blade: short thorn spikes off both sides along the blade, angled back
-  // toward the hilt like a harpoon. Drawn in the blade's own metal so they read
-  // as part of the steel.
+  // toward the hilt like a harpoon.
   if (prof.barbed) {
-    // Back-and-out directions (mix of −forward and ±normal): a swept-back barb.
     const back = { x: -Math.SQRT1_2, y: Math.SQRT1_2 }; // toward hilt (down-left)
     const perpA = { x: Math.SQRT1_2, y: Math.SQRT1_2 }; // down-right
     const dirA = norm(back.x + perpA.x * 1.6, back.y + perpA.y * 1.6);
@@ -211,22 +272,61 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
     }
   }
 
-  // Riveted modification: small round studs stamped down the blade's own
-  // centerline, like a bolstered/laminated blade. Same anchor scheme as the
-  // barbed thorns above (`o` walks the ortho diagonal from the blade's base).
+  // -- post-draw blade decorations -------------------------------------------
+  // All walk the blade's own centerline (the ortho diagonal from its base).
+  const decoStartO = blade.startOrtho + Math.round(3 * dscale);
+  const decoEndO = pen.dimension - Math.round(7 * dscale);
+  const decoSpacing = Math.max(4, Math.round(4.5 * dscale));
   if (modification === "riveted") {
-    const startO = blade.startOrtho + Math.round(3 * dscale);
-    const endO = pen.dimension - Math.round(7 * dscale);
-    const spacing = Math.max(4, Math.round(4.5 * dscale));
+    // Small round studs stamped down the centerline — a bolstered blade.
     const rivetRadius = Math.max(1, 0.9 * dscale);
-    for (let o = startO; o < endO; o += spacing) {
+    for (let o = decoStartO; o < decoEndO; o += decoSpacing) {
       pen.drawRoundOrnamentHelper({ center: new Vector(o, pen.dimension - 1 - o), radius: rivetRadius });
+    }
+  } else if (modification === "runes") {
+    // Glowing script down the centerline: alternating dash / cross marks in a
+    // single crystal colour (snapped to the crystal ramp, so they stay vivid).
+    const rune = pickCrystal(r);
+    const runeStr = colorStr(rune.light);
+    const runeDim = colorStr(rune.mid);
+    let alt = false;
+    for (let o = decoStartO; o < decoEndO; o += Math.max(3, Math.round(3.4 * dscale))) {
+      const cx = o, cy = pen.dimension - 1 - o;
+      pen.ctx.fillStyle = alt ? runeStr : runeDim;
+      // A tiny 2-3px glyph: a diagonal tick, alternating orientation.
+      pen.drawPixel(cx, cy);
+      if (alt) { pen.drawPixel(cx + 1, cy); pen.drawPixel(cx, cy - 1); }
+      else { pen.drawPixel(cx - 1, cy); pen.drawPixel(cx, cy + 1); }
+      alt = !alt;
+    }
+  } else if (modification === "gems") {
+    // 2–3 gems set along the lower half of the blade.
+    const g = pickGem(r);
+    const nGems = r.float() < 0.5 ? 2 : 3;
+    for (let i = 0; i < nGems; i++) {
+      const o = decoStartO + i * decoSpacing;
+      if (o >= decoEndO) break;
+      pen.drawRoundOrnamentHelper({
+        center: new Vector(o, pen.dimension - 1 - o),
+        radius: Math.max(1, 1.0 * dscale),
+        colorLight: g.light,
+        colorDark: g.shadow,
+      });
+    }
+  } else if (modification === "etched") {
+    // A row of dark etched diamond marks — engraved ornament, not studs.
+    const etchR = Math.max(1.2, 1.1 * dscale);
+    for (let o = decoStartO; o < decoEndO; o += decoSpacing) {
+      pen.drawDiamondOrnamentHelper({
+        center: new Vector(o, pen.dimension - 1 - o),
+        radius: etchR,
+        colorLight: blade.hiltColor,
+        colorDark: { r: blade.hiltColor.r * 0.4, g: blade.hiltColor.g * 0.4, b: blade.hiltColor.b * 0.4 },
+      });
     }
   }
 
-  // Grip — a thin hand-width handle, clearly narrower than the blade. Capped low
-  // (and below the blade's half-width) so it never reads as ~half the blade's
-  // width. ~2px at the in-app/preview render sizes.
+  // Grip — a thin hand-width handle, clearly narrower than the blade.
   const gripRadius = Math.max(2, Math.min(blade.startRadius - 1, Math.round(1.0 * dscale)));
   const hiltStartDiag = Math.floor(pommelLength * Math.SQRT2);
   pen.drawGripHelper({
@@ -237,237 +337,199 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
     fractionalRadiusAllowed: false,
   });
 
-  // Guard — sized off the blade's base half-width so it ALWAYS overhangs the
-  // blade edges (a guard narrower than its blade reads as broken) and gets
-  // chunkier for wider blades. `w` is the blade half-width at the base; a
-  // crossguard should span past it, not sit flush.
+  // -- guard ------------------------------------------------------------------
+  // All guards are anchored at the crossguard point on the blade axis and
+  // built from explicit bars/cones/discs along the perpendicular axis.
   let guardColors: CrossguardResults | undefined;
   const w = blade.startRadius;
-  // `diagToPosition` (÷√2) matches the existing "disc" guard's anchor — keep
-  // using it for every round-family guard (disc/trilobe/cup/starburst) for
-  // consistency with that already-shipped placement. `drawCrossguardHelper`'s
-  // OWN internal anchor is different: it uses `positionDiag` (= `blade.
-  // startOrtho`) directly as a raw pixel coordinate, no ÷√2 — so anything
-  // meant to line up with the crossguard's actual rendered arms (a finial
-  // spike, a langet, a knuckle-bow) must use `xguardStart`, not `guardPos`,
-  // or it lands several px off from where the guard really is.
-  const guardPos = diagToPosition(blade.startOrtho, bounds);
-  const xguardStart = new Vector(blade.startOrtho, bounds.h - 1 - blade.startOrtho);
-  // Toward the hilt/pommel, and toward the blade tip — shared axis for every
-  // guard embellishment below (langets sit up the blade; knuckle-bow/basket
-  // bars run down past the grip toward the pommel).
+  const g = new Vector(blade.startOrtho, bounds.h - 1 - blade.startOrtho);
   const toHilt = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
   const toTip = { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
-  // Every embellishment ball below is sized off this — the exact "disc guard"
-  // formula, since that's the one shape already proven to read clearly at the
-  // app's real 40-60px render size. An early pass sized finials/rings/beads
-  // off `guardThick` (~1.2-1.8px) instead — invisible at real size, only
-  // "visible" in an artificially 9-12x-zoomed verification crop. Never trust
-  // a zoomed crop alone for "is this discernible" — always check a natural-
-  // scale, unscaled render first.
+  const perp = { x: Math.SQRT1_2, y: Math.SQRT1_2 }; // across the blade
   const featureR = Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5));
-  const CROSSGUARD_TYPES: Guard[] = [
-    "bar", "swept", "wings", "spiked", "hook", "hourglass",
-    "langets", "sidering", "knucklebow", "basket",
-  ];
-  if (CROSSGUARD_TYPES.includes(guard)) {
-    // A crossguard is a THIN bar — thickness barely scales with blade width, or
-    // thick + curved arms clump into a blob that reads as a ball at the base.
-    const guardThick = Math.min(1.8, Math.max(1.2, w * 0.24));
-    const cfg: CrossguardParams = {
-      positionDiag: blade.startOrtho,
-      halfLength: w * (1.4 + 0.7 * r.floatLow()) + 2, // ≥1.4× blade half-width
-      thickness: guardThick,
-    };
-    if (guard === "swept") {
-      // A visibly curved-back quillon — enough curl to read as swept at tiny
-      // sizes, short of "wings"'s heavy spiral.
-      cfg.omegaChance = 0.35;
-      cfg.omegaAmount = Math.PI / 7;
-      cfg.halfLength = w * (1.6 + 0.8 * r.floatLow()) + 2;
-    } else if (guard === "wings") {
-      // A WIDE crossguard with a genuinely heavy curl. Previously this left
-      // `omegaAmount` at the same default a plain "bar" gets, so "wings" and
-      // "bar" rendered almost identically despite the "heavy curl spiralled
-      // into a blob" the comment promised — now the tips actually spiral.
-      cfg.halfLength = w * (2.0 + 0.8 * r.floatLow()) + 2;
-      cfg.omegaChance = 0.5;
-      cfg.omegaAmount = Math.PI / 5;
-      cfg.thickness = Math.min(2.0, guardThick + 0.3);
-    } else if (guard === "hook") {
-      // Short, tightly hooked quillons — a parrying-dagger/main-gauche guard.
-      cfg.halfLength = w * (1.1 + 0.4 * r.floatLow()) + 1.5;
-      cfg.omegaChance = 0.9;
-      cfg.omegaAmount = Math.PI / 4.5;
-    } else if (guard === "hourglass" || guard === "spiked") {
-      // A straight bar (`omegaChance: 0`) — both embellishments below (a
-      // flared bead / a ball-tipped finial) are stamped exactly at each tip,
-      // which only stays predictable if the arms don't curl.
-      cfg.omegaChance = 0;
-      if (guard === "hourglass") cfg.thickness = Math.max(1, guardThick * 0.7);
-    }
-    guardColors = pen.drawCrossguardHelper(cfg);
 
-    // Embellishments — drawn in the guard's own metal so they read as part of
-    // the fitting, not a separate piece.
-    const { colorLight: light, colorDark: dark } = guardColors;
-    if (guard === "spiked" || guard === "hourglass") {
-      // Both stamp a ball at each quillon tip — differentiated by relative
-      // size (spiked's is a smaller, harder knob; hourglass's is bigger, a
-      // genuine flared bulb) so the two don't collapse into the same shape.
-      const ballR = guard === "spiked" ? featureR * 0.55 : featureR * 0.9;
-      for (const a of [(-Math.PI * 3) / 4, Math.PI / 4]) {
-        const dir = { x: Math.cos(a), y: Math.sin(a) };
-        const tip = new Vector(xguardStart.x + dir.x * cfg.halfLength, xguardStart.y + dir.y * cfg.halfLength);
-        pen.drawRoundOrnamentHelper({ center: tip, radius: ballR, colorLight: light, colorDark: dark });
+  if (guard !== "none") {
+    const accent = pickGuardAccent(r);
+    guardColors = { colorLight: accent.light, colorDark: accent.shadow };
+    const light = accent.light;
+    const dark = accent.shadow;
+    // Bar-family sizing: always spans past the blade's edges.
+    const halfLen = w * (1.5 + 0.6 * r.floatLow()) + 2 * dscale;
+    const thick = Math.max(1.3, Math.min(2.2, w * 0.28));
+
+    const barTipA = { x: g.x + perp.x * halfLen, y: g.y + perp.y * halfLen };
+    const barTipB = { x: g.x - perp.x * halfLen, y: g.y - perp.y * halfLen };
+
+    switch (guard) {
+      case "bar":
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, thick, light, dark, toTip);
+        break;
+      case "vee": {
+        // Arms angled TOWARD the blade — a V cradling the blade's base.
+        const dirA = norm(perp.x + toTip.x * 0.65, perp.y + toTip.y * 0.65);
+        const dirB = norm(-perp.x + toTip.x * 0.65, -perp.y + toTip.y * 0.65);
+        const armLen = halfLen * 1.15;
+        fillBar(pen, g.x, g.y, g.x + dirA.x * armLen, g.y + dirA.y * armLen, thick, light, dark, toTip);
+        fillBar(pen, g.x, g.y, g.x + dirB.x * armLen, g.y + dirB.y * armLen, thick, light, dark, toTip);
+        break;
       }
-    } else if (guard === "langets") {
-      // A short, wide flared collar flush against the blade's base — reads as
-      // a distinct fitting plate, not a thin line that blends into the blade.
-      const collarCenter = new Vector(xguardStart.x + toTip.x * featureR * 0.6, xguardStart.y + toTip.y * featureR * 0.6);
-      pen.drawRoundOrnamentHelper({
-        center: collarCenter,
-        radius: featureR * 1.1,
-        radiusY: featureR * 0.55,
-        colorLight: light,
-        colorDark: dark,
-      });
-    } else if (guard === "sidering") {
-      // A finger-ring (pas d'âne) off to one side, protecting a finger hooked
-      // over the guard — a genuine rapier hilt feature.
-      const dir = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
-      const ringR = featureR * 1.1;
-      const reach = ringR + gripRadius * 0.5;
-      pen.drawRoundOrnamentHelper({
-        center: new Vector(xguardStart.x + dir.x * reach, xguardStart.y + dir.y * reach),
-        radius: ringR,
-        holeRadius: ringR * 0.5,
-        colorLight: light,
-        colorDark: dark,
-      });
-    } else if (guard === "knucklebow" || guard === "basket") {
-      // A run of large beads alongside the grip from the guard down toward
-      // the pommel corner — a knuckle-bow. "basket" repeats it at a couple
-      // more lateral offsets for a caged-hand impression. Few, BIG beads
-      // (not many tiny ones) so it reads as a deliberate bar, not noise.
-      // `xguardStart + toHilt * (blade.startOrtho * √2)` walks exactly to the
-      // canvas's bottom-left corner (where the pommel sits) — pure geometry,
-      // no dependency on the grip's own diag/ortho conversion quirks.
-      const beadR = featureR * 0.65;
-      const lateral = { x: Math.SQRT1_2, y: Math.SQRT1_2 };
-      const reachLen = blade.startOrtho * Math.SQRT2 * 0.8;
-      const lanes = guard === "basket" ? [1.3, 2.6] : [1.6];
-      const steps = 2;
-      for (const lane of lanes) {
+      case "swept": {
+        // Mirrored V: arms droop toward the pommel — a swept hilt.
+        const dirA = norm(perp.x + toHilt.x * 0.65, perp.y + toHilt.y * 0.65);
+        const dirB = norm(-perp.x + toHilt.x * 0.65, -perp.y + toHilt.y * 0.65);
+        const armLen = halfLen * 1.15;
+        fillBar(pen, g.x, g.y, g.x + dirA.x * armLen, g.y + dirA.y * armLen, thick, light, dark, toTip);
+        fillBar(pen, g.x, g.y, g.x + dirB.x * armLen, g.y + dirB.y * armLen, thick, light, dark, toTip);
+        // A small ball where the arms meet, so the join reads deliberate.
+        pen.drawRoundOrnamentHelper({ center: g, radius: thick * 1.1, colorLight: light, colorDark: dark });
+        break;
+      }
+      case "winged": {
+        // A straight bar with upturned tip flicks — winged crossguard.
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, thick, light, dark, toTip);
+        const flick = halfLen * 0.55;
+        for (const tip of [barTipA, barTipB]) {
+          pen.fillCone(tip.x, tip.y, toTip.x, toTip.y, 0, flick, thick * 1.15, light, dark);
+        }
+        break;
+      }
+      case "balled": {
+        // A bar with a distinct bead at each tip.
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, thick * 0.85, light, dark, toTip);
+        for (const tip of [barTipA, barTipB]) {
+          pen.drawRoundOrnamentHelper({ center: new Vector(tip.x, tip.y), radius: featureR * 0.85, colorLight: light, colorDark: dark });
+        }
+        break;
+      }
+      case "spiked": {
+        // A bar whose tips continue into sharp outward spikes.
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, thick, light, dark, toTip);
+        const spikeLen = halfLen * 0.7;
+        pen.fillCone(barTipA.x, barTipA.y, perp.x, perp.y, 0, spikeLen, thick * 1.3, light, dark);
+        pen.fillCone(barTipB.x, barTipB.y, -perp.x, -perp.y, 0, spikeLen, thick * 1.3, light, dark);
+        break;
+      }
+      case "oval": {
+        // A chunky rounded slab across the blade — a tsuba-style plate,
+        // clearly thicker than a bar and wider than the blade.
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, Math.max(2.2, w * 0.42), light, dark, toTip);
+        break;
+      }
+      case "ring": {
+        // An open ring just below the blade base — the hole is the feature.
+        const ringR = featureR * 1.35;
+        const c = new Vector(g.x + toHilt.x * ringR * 0.2, g.y + toHilt.y * ringR * 0.2);
+        pen.drawRoundOrnamentHelper({ center: c, radius: ringR, holeRadius: ringR * 0.5, colorLight: light, colorDark: dark });
+        break;
+      }
+      case "cup": {
+        // A dome sheltering the grip top: a half-annulus opening toward the
+        // pommel, plus a thin bar across the mouth.
+        const ro = featureR * 1.7;
+        const ri = ro * 0.5;
+        for (let x = Math.floor(g.x - ro); x <= Math.ceil(g.x + ro); x++) {
+          for (let y = Math.floor(g.y - ro); y <= Math.ceil(g.y + ro); y++) {
+            if (x < 0 || y < 0 || x >= pen.dimension || y >= pen.dimension) continue;
+            const d = Math.hypot(x - g.x, y - g.y);
+            if (d > ro || d < ri) continue;
+            const along = (x - g.x) * toTip.x + (y - g.y) * toTip.y;
+            if (along < -ro * 0.15) continue; // keep only the blade-side dome
+            const side = ((x - g.x) * perp.x + (y - g.y) * perp.y) / ro;
+            pen.ctx.fillStyle = colorStr(colorLerp(dark, light, 0.65 - side * 0.35));
+            pen.drawPixel(x, y);
+          }
+        }
+        fillBar(pen, g.x + perp.x * ro * 0.9, g.y + perp.y * ro * 0.9, g.x - perp.x * ro * 0.9, g.y - perp.y * ro * 0.9, thick * 0.8, light, dark, toTip);
+        break;
+      }
+      case "shell": {
+        // A scallop fan of short blades spread toward the blade side.
+        const nRib = 5;
+        const ribLen = featureR * 2.4;
+        for (let i = 0; i < nRib; i++) {
+          const a = (i / (nRib - 1) - 0.5) * (Math.PI * 0.85);
+          const d = rotate(toTip, a);
+          pen.fillCone(g.x, g.y, d.x, d.y, featureR * 0.2, ribLen, thick * 0.95, light, dark);
+        }
+        break;
+      }
+      case "plate": {
+        // A rhombus plate — a diamond escutcheon at the blade's base.
+        pen.drawDiamondOrnamentHelper({ center: g, radius: featureR * 1.9, colorLight: light, colorDark: dark });
+        break;
+      }
+      case "knucklebow": {
+        // A short bar plus a smooth arc from one tip down to the pommel — a
+        // real knuckle-bow, drawn as a quadratic curve, not a bead run.
+        fillBar(pen, barTipA.x, barTipA.y, barTipB.x, barTipB.y, thick, light, dark, toTip);
+        const pommelPt = { x: Math.max(2, gripRadius), y: pen.dimension - 1 - Math.max(2, gripRadius) - 1 };
+        // Control point pushed outward so the bow bellies away from the grip.
+        const midX = (barTipA.x + pommelPt.x) / 2 + perp.x * halfLen * 0.9;
+        const midY = (barTipA.y + pommelPt.y) / 2 + perp.y * halfLen * 0.9;
+        const steps = 22;
+        const bowHalf = Math.max(1.1, thick * 0.8);
         for (let i = 0; i <= steps; i++) {
           const t = i / steps;
-          const base = new Vector(xguardStart.x + toHilt.x * reachLen * t, xguardStart.y + toHilt.y * reachLen * t);
-          const reach = lane * (gripRadius + 1);
-          pen.drawRoundOrnamentHelper({
-            center: new Vector(base.x + lateral.x * reach, base.y + lateral.y * reach),
-            radius: beadR,
-            colorLight: light,
-            colorDark: dark,
-          });
+          const it = 1 - t;
+          const bx = it * it * barTipA.x + 2 * it * t * midX + t * t * pommelPt.x;
+          const by = it * it * barTipA.y + 2 * it * t * midY + t * t * pommelPt.y;
+          for (let ox = -bowHalf; ox <= bowHalf; ox += 0.5) {
+            for (let oy = -bowHalf; oy <= bowHalf; oy += 0.5) {
+              if (Math.hypot(ox, oy) > bowHalf) continue;
+              const x = Math.round(bx + ox);
+              const y = Math.round(by + oy);
+              if (x < 0 || y < 0 || x >= pen.dimension || y >= pen.dimension) continue;
+              pen.ctx.fillStyle = colorStr(colorLerp(dark, light, 0.5 - ox * 0.25));
+              pen.drawPixel(x, y);
+            }
+          }
         }
+        break;
       }
-    }
-  } else if (guard === "disc") {
-    // A small round disc guard — a knob just past the grip, absolutely
-    // capped so wide blades don't sprout a giant sphere at the base.
-    pen.drawRoundOrnamentHelper({ center: new Vector(guardPos.x, guardPos.y), radius: Math.min(gripRadius + 2, Math.max(gripRadius + 1, w * 0.5)) });
-  } else if (guard === "trilobe") {
-    // Three lobes clustered at the grip base — a wider, guard-scale cousin of
-    // the trefoil pommel.
-    const lobeR = Math.min(gripRadius + 1.6, Math.max(gripRadius + 0.8, w * 0.42));
-    const accent = pickGuardAccent(r);
-    for (const a of [0, (Math.PI * 2) / 3, -(Math.PI * 2) / 3]) {
-      const o = rotate(toHilt, a);
-      pen.drawRoundOrnamentHelper({
-        center: new Vector(guardPos.x + o.x * lobeR * 0.9, guardPos.y + o.y * lobeR * 0.9),
-        radius: lobeR,
-        colorLight: accent.light,
-        colorDark: accent.shadow,
-      });
-    }
-  } else if (guard === "cup") {
-    // A full cup-hilt shell — noticeably bigger than "disc", with an inset
-    // lighter face for a concave-bowl highlight.
-    const outerR = Math.min(gripRadius + 3, Math.max(gripRadius + 2, w * 0.75));
-    const accent = pickGuardAccent(r);
-    const center = new Vector(guardPos.x, guardPos.y);
-    pen.drawRoundOrnamentHelper({ center, radius: outerR, colorLight: accent.light, colorDark: accent.shadow });
-    pen.drawRoundOrnamentHelper({ center, radius: outerR * 0.6, colorLight: accent.spec, colorDark: accent.light });
-  } else if (guard === "starburst") {
-    // A core with spikes radiating all around — a rondel/starburst guard,
-    // the mace-flanged cousin of the crossguard family. Core matches
-    // `featureR` (the disc guard's own proven-visible size) so the spikes
-    // read as an addition ON TOP of a disc-sized knob, not the whole feature.
-    const coreR = featureR * 0.75;
-    const accent = pickGuardAccent(r);
-    const center = new Vector(guardPos.x, guardPos.y);
-    pen.drawRoundOrnamentHelper({ center, radius: coreR, colorLight: accent.light, colorDark: accent.shadow });
-    for (let i = 0; i < 6; i++) {
-      const d = rotate(toHilt, (i / 6) * Math.PI * 2);
-      pen.fillCone(center.x, center.y, d.x, d.y, coreR * 0.6, coreR * 1.5, coreR * 0.45, accent.light, accent.shadow);
     }
   }
 
-  // Pommel — historical hilt-cap shapes, not just a recoloured ball. Most
-  // stay just under the (thin) grip radius so they never overpower the
-  // handle; a few genuinely wider builds (wheel/ring/flanged/crown) are
-  // allowed to overhang it a little, the same latitude the disc guard gets.
+  // -- pommel -----------------------------------------------------------------
+  // Historical hilt-cap shapes. The accent metal is its own independent roll
+  // half the time (a gold pommel on a steel guard), otherwise matches the
+  // guard's fitting for a coordinated hilt.
   if (pommel !== "none") {
     const pommelRadius = Math.max(1, gripRadius * 0.55);
     const wideRadius = Math.min(gripRadius + 1.2, pommelRadius * 2.2);
-    // Halfway between the two — a knob body large enough that small
-    // appendages (a cap band, a hooked beak, a fan of prongs) survive
-    // `cleanSilhouette`'s orphan-pixel pruning and actually register at the
-    // 40–60px the app renders at, without sprouting into "wide" territory.
     const midRadius = (pommelRadius + wideRadius) / 2;
     const center = new Vector(Math.floor(pommelRadius + 1), Math.ceil(bounds.h - pommelRadius - 2));
     const wideCenter = new Vector(Math.floor(wideRadius + 1), Math.ceil(bounds.h - wideRadius - 2));
     const midCenter = new Vector(Math.floor(midRadius + 1), Math.ceil(bounds.h - midRadius - 2));
-    // Away from the blade, past the grip end — the axis any spike/prong/hook
-    // on a pommel points along (same direction the barbed thorns use above).
     const back = { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
 
     if (pommel === "gem" || pommel === "faceted") {
-      const g = pickGem(r);
+      const gm = pickGem(r);
       if (pommel === "gem") {
-        pen.drawRoundOrnamentHelper({ center, radius: pommelRadius, colorLight: g.light, colorDark: g.shadow });
+        pen.drawRoundOrnamentHelper({ center, radius: pommelRadius, colorLight: gm.light, colorDark: gm.shadow });
       } else {
-        // Same jewel colours as "gem" but a rhombus cut instead of a ball —
-        // reads as a genuinely different setting, not just a recolour.
-        drawFacetedGem(pen, center, pommelRadius * 1.3, g.light, g.shadow);
+        drawFacetedGem(pen, center, pommelRadius * 1.3, gm.light, gm.shadow);
       }
     } else if (pommel === "round") {
       const p: OrnamentParams = { center, radius: pommelRadius };
-      if (guardColors) {
+      if (guardColors && r.float() < 0.6) {
         p.colorLight = guardColors.colorLight;
         p.colorDark = guardColors.colorDark;
       }
       pen.drawRoundOrnamentHelper(p);
     } else {
-      // Every other style shares one metal accent — matching the guard's
-      // metal when there is one, otherwise a fresh accent pick — across the
-      // knob plus whatever prongs/flanges/hooks sit on it.
-      const metal = guardColors ?? (() => { const a = pickGuardAccent(r); return { colorLight: a.light, colorDark: a.shadow }; })();
+      // Independent accent roll half the time — pommels aren't always the
+      // same metal as the guard.
+      const useGuardMetal = guardColors && r.float() < 0.5;
+      const metal = useGuardMetal ? guardColors! : (() => { const a = pickGuardAccent(r); return { colorLight: a.light, colorDark: a.shadow }; })();
       const { colorLight: light, colorDark: dark } = metal;
       switch (pommel) {
         case "wheel":
-          // Flat wide disc flush with the grip end — the classic arming-sword
-          // "wheel pommel", clearly wider than tall.
           pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius, radiusY: wideRadius * 0.6, colorLight: light, colorDark: dark });
           break;
         case "ring":
-          // A visible loop through the pommel — the historic ring pommel.
           pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius, holeRadius: wideRadius * 0.5, colorLight: light, colorDark: dark });
           break;
         case "trefoil": {
-          // Three lobes clustered around the grip end — the Viking-age
-          // trilobate pommel. Sized off `midRadius` and spaced past their own
-          // radius so the cluster reads as three bumps, not one blob.
           const lobeR = midRadius * 0.78;
           for (const a of [0, (Math.PI * 2) / 3, -(Math.PI * 2) / 3]) {
             const o = rotate(back, a);
@@ -481,9 +543,6 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
           break;
         }
         case "acorn": {
-          // A rounded body with a contrasting cap band near the neck — the
-          // historical acorn pommel. Bigger + a stronger offset than a plain
-          // round knob so the two-tone cap survives at tiny render sizes.
           pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius, colorLight: light, colorDark: dark });
           const cap = pickGuardAccent(r);
           const capOffset = midRadius * 0.9;
@@ -496,18 +555,12 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
           break;
         }
         case "scentstopper":
-          // A slim elongated capsule along the hilt axis — the Renaissance
-          // rapier "scent-stopper" pommel.
           pen.drawRoundOrnamentHelper({ center, radius: pommelRadius * 0.75, radiusY: pommelRadius * 1.9, colorLight: light, colorDark: dark });
           break;
         case "spike":
-          // A tapered cone jutting straight off the grip end — a military
-          // spike pommel.
           pen.fillCone(center.x, center.y, back.x, back.y, 0, pommelRadius * 2.4, pommelRadius * 0.9, light, dark);
           break;
         case "flanged":
-          // A small ball with radiating flanges — a miniature mace head
-          // capping the grip.
           pen.drawRoundOrnamentHelper({ center: wideCenter, radius: wideRadius * 0.7, colorLight: light, colorDark: dark });
           for (let i = 0; i < 4; i++) {
             const d = rotate(back, (i / 4) * Math.PI * 2);
@@ -515,9 +568,6 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
           }
           break;
         case "crown":
-          // A small coronet — a ball with three points fanned toward the
-          // grip end, like a ceremonial crown pommel. Longer, chunkier prongs
-          // than a first pass so they clear `cleanSilhouette`'s pruning.
           pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius * 0.8, colorLight: light, colorDark: dark });
           for (const a of [-0.6, 0, 0.6]) {
             const d = rotate(back, a);
@@ -525,12 +575,28 @@ export function drawBlade(pen: Pen, parts?: BladeParts): void {
           }
           break;
         case "birdhead": {
-          // An asymmetric hooked cap — the "bird-head" pommel seen on
-          // sabers, curling to one side rather than sitting flush. A longer
-          // hook than a plain round knob's radius so the curl actually reads.
           pen.drawRoundOrnamentHelper({ center: midCenter, radius: midRadius * 0.85, colorLight: light, colorDark: dark });
           const hook = rotate(back, 1.15);
           pen.fillCone(midCenter.x, midCenter.y, hook.x, hook.y, midRadius * 0.5, midRadius * 1.8, midRadius * 0.6, light, dark);
+          break;
+        }
+        case "crescent": {
+          // A moon-crescent cap: a disc with an offset disc cut away, horns
+          // pointing back past the grip end.
+          const rad = midRadius * 1.15;
+          const cutOff = rad * 0.5;
+          const lit = colorStr(light);
+          const dk = colorStr(dark);
+          for (let x = Math.floor(midCenter.x - rad); x <= Math.ceil(midCenter.x + rad); x++) {
+            for (let y = Math.floor(midCenter.y - rad); y <= Math.ceil(midCenter.y + rad); y++) {
+              if (x < 0 || y < 0 || x >= pen.dimension || y >= pen.dimension) continue;
+              if (Math.hypot(x - midCenter.x, y - midCenter.y) > rad) continue;
+              // Cut away a disc shifted toward the blade → horns point back.
+              if (Math.hypot(x - (midCenter.x - back.x * cutOff), y - (midCenter.y - back.y * cutOff)) < rad * 0.78) continue;
+              pen.ctx.fillStyle = (x - midCenter.x) * toTip.x + (y - midCenter.y) * toTip.y > 0 ? lit : dk;
+              pen.drawPixel(x, y);
+            }
+          }
           break;
         }
       }

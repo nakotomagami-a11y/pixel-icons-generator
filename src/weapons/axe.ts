@@ -1,20 +1,29 @@
 import type { Pen } from "../pen";
 import type { Color } from "../types";
-import type { AxeHead as Head, AxeParts } from "../types";
+import type { AxeHead as Head, AxeBack, AxeButt, AxeDecoration, AxeParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorLerp, colorStr, colorDarken } from "../color";
 import { Rng } from "../rng";
 import { pickBladeMetal, pickGem, pickCrystal, GOLD, WOOD, DARK, BRONZE } from "../palette";
 
 /**
- * Mix-and-match axe: a haft along the bottom-left→top-right diagonal, a head of
- * one of several shapes (single bit, bearded, broad fan, double bit, crescent),
- * and optional features — top spike, back pick/spike, notched edge, gem inset —
- * plus haft details (leather wrap bands, end ring / pommel). Procedural shapes
- * derived from the reference vocabulary, not copied pixels.
+ * Mix-and-match axe, layer by layer: a haft along the bottom-left→top-right
+ * diagonal, a HEAD of one of ten shapes, an explicit BACK fitting opposite
+ * the bit (spike / pick / hammer poll / hook), a BUTT at the haft's end, and
+ * a DECORATION (gem, rivets, inlay, runes, wrap…). Every layer is an
+ * independent pick so the dropdowns compose.
  */
 
-const HEADS: Head[] = ["fan", "bearded", "broad", "double", "crescent", "halberd", "fan", "bearded", "crescent", "halberd"];
+const HEADS: Head[] = [
+  "fan", "fan", "bearded", "bearded", "broad", "double", "crescent",
+  "halberd", "halberd", "warpick", "hammer", "greataxe", "tomahawk",
+];
+const BACKS: AxeBack[] = ["none", "none", "spike", "spike", "pick", "hammer", "hook"];
+const BUTTS: AxeButt[] = ["none", "ring", "ring", "cap", "cap", "spike"];
+const DECORATIONS: AxeDecoration[] = [
+  "none", "none", "gem", "rivets", "rivets", "inlay", "thongs",
+  "fuller", "runes", "notch", "wrap", "wrap", "ferrule",
+];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const norm = (x: number, y: number) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
@@ -53,7 +62,10 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
 
   pen.clearCanvas();
 
-  const head = parts?.head ?? pick(r, HEADS);
+  const head: Head = parts?.head && HEADS.includes(parts.head) ? parts.head : pick(r, HEADS);
+  const back: AxeBack = parts?.back && BACKS.includes(parts.back) ? parts.back : pick(r, BACKS);
+  const butt: AxeButt = parts?.butt && BUTTS.includes(parts.butt) ? parts.butt : pick(r, BUTTS);
+  const deco: AxeDecoration = parts?.decoration && DECORATIONS.includes(parts.decoration) ? parts.decoration : pick(r, DECORATIONS);
   const metal = r.float() < 0.1 ? pickCrystal(r) : pickBladeMetal(r); // ~10% enchanted crystal head
   const accent = r.float() < 0.5 ? GOLD : metal;
 
@@ -63,7 +75,7 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
   // enough down the diagonal that the cutting edge doesn't clip off the top
   // corner — hence more clearance than the old thin wedges needed. A halberd
   // sits lower still so its long top spike has room to reach the corner.
-  const headDiag = canvasDiag - Math.ceil((head === "halberd" ? r.range(13, 16) : r.range(10, 13)) * dscale);
+  const headDiag = canvasDiag - Math.ceil((head === "halberd" ? r.range(13, 16) : head === "tomahawk" ? r.range(8, 10) : head === "greataxe" ? r.range(12, 14) : r.range(10, 13)) * dscale);
   const u = new Vector(1, -1).normalize(); // along haft, toward the head (top-right)
   const n = new Vector(-1, -1).normalize(); // outward (top-left)
   const anchorDiag = headDiag - Math.floor(r.range(0, 2) * dscale);
@@ -72,35 +84,38 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
 
   const anchor = diagToPosition(anchorDiag, bounds);
 
-  const notch = r.float() < 0.3 ? r.rangeFloat(0.16, 0.30) : 0;
+  const notch = deco === "notch" ? r.rangeFloat(0.16, 0.30) : 0;
   const doubleSide = head === "double";
+  const fanFamily = head !== "warpick" && head !== "hammer";
 
   // Convex-arc bit (see FanParams). Defaults = single-bit hatchet: cutting edge
   // a bold convex arc reaching up-left, a beard hanging down toward the grip,
   // and only a small rise above the socket (so it never streams up-right off
   // the haft top into a pennant/flag — the old failure mode).
   const p: FanParams = {
-    sockTop: r.rangeFloat(3, 3.5) * dscale,
-    sockBot: r.rangeFloat(3, 3.5) * dscale,
-    kTop: r.rangeFloat(0.35, 0.5),
-    kBot: r.rangeFloat(0.55, 0.72),
+    sockTop: r.rangeFloat(2.5, 3) * dscale,
+    sockBot: r.rangeFloat(2.5, 3) * dscale,
+    kTop: r.rangeFloat(0.28, 0.4),
+    kBot: r.rangeFloat(0.65, 0.85),
     depth: r.rangeFloat(10.5, 12) * dscale,
-    curve: r.rangeFloat(1.4, 1.6),
-    sMid: -r.rangeFloat(1.5, 3) * dscale,
+    curve: r.rangeFloat(1.3, 1.5),
+    sMid: -r.rangeFloat(2, 3.5) * dscale,
     notch,
-    fuller: notch === 0 && r.float() < 0.35,
+    fuller: deco === "fuller",
   };
   if (head === "bearded") {
     // Hatchet with a long beard: flatter top, edge hangs toward the grip.
-    p.kTop = r.rangeFloat(0.2, 0.32);
-    p.kBot = r.rangeFloat(0.8, 1.0);
+    p.kTop = r.rangeFloat(0.18, 0.28);
+    p.kBot = r.rangeFloat(0.85, 1.05);
+    p.sockTop = r.rangeFloat(2.4, 2.8) * dscale;
+    p.sockBot = r.rangeFloat(2.4, 2.8) * dscale;
     p.depth = r.rangeFloat(11, 12.5) * dscale;
     p.curve = r.rangeFloat(1.25, 1.45);
     p.sMid = -r.rangeFloat(3.5, 5) * dscale;
   } else if (head === "broad") {
     p.kTop = r.rangeFloat(0.55, 0.7); // wide, near-symmetric fan
     p.kBot = r.rangeFloat(0.55, 0.7);
-    p.sockTop = p.sockBot = r.rangeFloat(3.2, 3.8) * dscale;
+    p.sockTop = p.sockBot = r.rangeFloat(2.8, 3.2) * dscale;
     p.depth = r.rangeFloat(11, 12.5) * dscale;
     p.curve = r.rangeFloat(1.45, 1.65);
     p.sMid = 0;
@@ -120,7 +135,7 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
     p.depth = r.rangeFloat(11, 12.5) * dscale;
     p.curve = r.rangeFloat(1.4, 1.6);
     p.sMid = 0;
-    p.concave = r.rangeFloat(0.3, 0.45); // centre scoop → crescent horns
+    p.concave = r.rangeFloat(0.45, 0.6); // centre scoop → crescent horns
     p.fuller = false;
   } else if (head === "halberd") {
     // Compact bit — the long top spike (added below) is the halberd's signature.
@@ -129,9 +144,39 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
     p.depth = r.rangeFloat(7, 8.5) * dscale;
     p.curve = r.rangeFloat(1.3, 1.5);
     p.sMid = -r.rangeFloat(1, 2.5) * dscale;
+  } else if (head === "greataxe") {
+    // An oversized executioner bit: deep, tall, boldly curved.
+    p.kTop = r.rangeFloat(0.6, 0.75);
+    p.kBot = r.rangeFloat(0.6, 0.75);
+    p.sockTop = p.sockBot = r.rangeFloat(3.8, 4.4) * dscale;
+    p.depth = r.rangeFloat(12.5, 14) * dscale;
+    p.curve = r.rangeFloat(1.5, 1.7);
+    p.sMid = 0;
+  } else if (head === "tomahawk") {
+    // A small, light hatchet bit high on a slender haft.
+    p.kTop = r.rangeFloat(0.3, 0.42);
+    p.kBot = r.rangeFloat(0.5, 0.65);
+    p.sockTop = p.sockBot = r.rangeFloat(2.2, 2.6) * dscale;
+    p.depth = r.rangeFloat(7, 8.5) * dscale;
+    p.curve = r.rangeFloat(1.3, 1.5);
+    p.sMid = -r.rangeFloat(1, 2) * dscale;
   }
-  drawFan(pen, anchor, u, n, p, metal, 1);
-  if (doubleSide) drawFan(pen, anchor, u, n, p, metal, -1);
+  if (fanFamily) {
+    drawFan(pen, anchor, u, n, p, metal, 1);
+    if (doubleSide) drawFan(pen, anchor, u, n, p, metal, -1);
+  } else if (head === "warpick") {
+    // A long forward pick spike instead of a bit, angled slightly down (a
+    // raven's beak), plus a solid poll block behind.
+    const pickLen = r.rangeFloat(11, 13) * dscale;
+    const dir = norm(n.x - u.x * 0.18, n.y - u.y * 0.18);
+    pen.fillCone(anchor.x, anchor.y, dir.x, dir.y, 0, pickLen, r.rangeFloat(2.8, 3.3) * dscale, metal.light, metal.shadow);
+    drawBlock(pen, anchor, u, n, r.rangeFloat(3.0, 3.5) * dscale, r.rangeFloat(3.4, 4.2) * dscale, metal, -1);
+  } else if (head === "hammer") {
+    // A double-faced maul: a big striking block outward and a shorter poll
+    // behind, so the head reads as one heavy rectangle through the haft.
+    drawBlock(pen, anchor, u, n, r.rangeFloat(4.0, 4.6) * dscale, r.rangeFloat(7, 8) * dscale, metal, 1);
+    drawBlock(pen, anchor, u, n, r.rangeFloat(3.2, 3.6) * dscale, r.rangeFloat(3.5, 4.2) * dscale, metal, -1);
+  }
 
   // Top spike: a long bladed point continuing past the head, in line with the
   // haft — the halberd's signature. On other heads this used to appear as a
@@ -146,31 +191,46 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
     pen.fillCone(tp.x, tp.y, u.x, u.y, 0, len, half, metal.light, metal.shadow);
   }
 
-  // Back pick/spike opposite the bit (single-bit heads only).
-  if (!doubleSide && head !== "crescent" && r.float() < 0.5) {
-    const beveled = r.float() < 0.5;
-    pen.fillCone(anchor.x, anchor.y, -n.x, -n.y, 0, r.rangeFloat(3, 6) * dscale, (beveled ? 1.2 : 2.4) * dscale, metal.light, metal.shadow);
+  // -- back fitting opposite the bit (single-bit heads only; warpick/hammer
+  // carry their own poll, double/crescent have no "back") ---------------------
+  if (!doubleSide && head !== "crescent" && head !== "warpick" && head !== "hammer" && back !== "none") {
+    if (back === "spike") {
+      pen.fillCone(anchor.x, anchor.y, -n.x, -n.y, 0, r.rangeFloat(3.5, 5.5) * dscale, 2.4 * dscale, metal.light, metal.shadow);
+    } else if (back === "pick") {
+      // Longer, thinner, angled slightly down — a raven's-beak war pick.
+      const dir = norm(-n.x - u.x * 0.35, -n.y - u.y * 0.35);
+      pen.fillCone(anchor.x, anchor.y, dir.x, dir.y, 0, r.rangeFloat(5.5, 7) * dscale, 1.5 * dscale, metal.light, metal.shadow);
+    } else if (back === "hammer") {
+      drawBlock(pen, anchor, u, n, r.rangeFloat(2.2, 2.6) * dscale, r.rangeFloat(2.8, 3.4) * dscale, metal, -1);
+    } else if (back === "hook") {
+      // A down-curved hook: two joined cones bending toward the hilt.
+      const dir1 = norm(-n.x - u.x * 0.15, -n.y - u.y * 0.15);
+      const elbowLen = r.rangeFloat(2.6, 3.2) * dscale;
+      const ex = anchor.x + dir1.x * elbowLen;
+      const ey = anchor.y + dir1.y * elbowLen;
+      const dir2 = norm(-n.x - u.x * 1.2, -n.y - u.y * 1.2);
+      pen.fillCone(anchor.x, anchor.y, dir1.x, dir1.y, 0, elbowLen + 1, 1.6 * dscale, metal.light, metal.shadow);
+      pen.fillCone(ex, ey, dir2.x, dir2.y, 0, r.rangeFloat(3, 4) * dscale, 1.3 * dscale, metal.light, metal.shadow);
+    }
   }
 
-  // Gem inset near the head's neck.
-  const hasGem = r.float() < 0.28;
-  const gem = hasGem ? pickGem(r) : null;
-  if (gem) {
+  // -- decoration --------------------------------------------------------------
+  let gem: { light: Color; shadow: Color } | null = null;
+  if (deco === "gem") {
+    const gm = pickGem(r);
+    gem = gm;
     const gc = new Vector(anchor.x + n.x * 1.5, anchor.y + n.y * 1.5);
-    pen.drawRoundOrnamentHelper({ center: gc, radius: Math.max(1.2, 1.4 * dscale), colorLight: gem.light, colorDark: gem.shadow });
-  } else if (r.float() < 0.4) {
-    // Rivets: a couple of dark bolt studs where the bit is forged to the socket.
+    pen.drawRoundOrnamentHelper({ center: gc, radius: Math.max(1.2, 1.4 * dscale), colorLight: gm.light, colorDark: gm.shadow });
+  } else if (deco === "rivets") {
+    // Dark bolt studs where the bit is forged to the socket.
     const nR = r.float() < 0.5 ? 2 : 3;
     for (let i = 0; i < nR; i++) {
       const off = (1.6 + i * 2.2) * dscale;
       const rc = new Vector(anchor.x + n.x * off, anchor.y + n.y * off);
       pen.drawRoundOrnamentHelper({ center: rc, radius: Math.max(0.8, 0.6 * dscale), colorLight: DARK.mid, colorDark: DARK.shadow });
     }
-  }
-
-  // Hanging leather thongs from the head socket — short, stubby strips (NOT the
-  // fluttering cloth ribbons the spears/tridents carry).
-  if (r.float() < 0.3) {
+  } else if (deco === "thongs") {
+    // Hanging leather thongs from the head socket — short, stubby strips.
     const th = r.float() < 0.5 ? WOOD : DARK;
     const nT = r.range(2, 4);
     const rootX = anchor.x - u.x * 1.5 * dscale;
@@ -180,10 +240,8 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
       const dir = norm(-u.x + n.x * sp, -u.y + n.y * sp);
       pen.fillCone(rootX, rootY, dir.x, dir.y, 0, r.rangeFloat(3, 5) * dscale, Math.max(0.8, 0.8 * dscale), th.mid, th.shadow);
     }
-  }
-
-  // Enamel inlay band: a stripe of accent colour across the bit face.
-  if (!gem && r.float() < 0.25) {
+  } else if (deco === "inlay") {
+    // Enamel inlay band: a stripe of accent colour across the bit face.
     const inlay = r.float() < 0.5 ? GOLD : pickCrystal(r);
     const d0 = r.rangeFloat(2.5, 4) * dscale;
     for (let t = -6 * dscale; t <= 6 * dscale; t += 0.5) {
@@ -196,10 +254,25 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
         pen.drawPixel(x, y);
       }
     }
-  }
-
-  // Mid-haft accent ferrule: a bright metal band girdling the shaft.
-  if (r.float() < 0.35) {
+  } else if (deco === "runes") {
+    // Small glowing glyphs stamped across the bit face.
+    const rune = pickCrystal(r);
+    const runeStr = colorStr(rune.light);
+    const dimStr = colorStr(rune.mid);
+    const d0 = (fanFamily ? p.depth * 0.45 : 2.5 * dscale);
+    for (let i = 0; i < 3; i++) {
+      const s0 = (i - 1) * 2.8 * dscale + (doubleSide ? 0 : -1 * dscale);
+      const x = Math.round(anchor.x + u.x * s0 + n.x * d0);
+      const y = Math.round(anchor.y + u.y * s0 + n.y * d0);
+      if (x < 1 || y < 1 || x >= bounds.w - 1 || y >= bounds.h - 1) continue;
+      if (pen.ctx.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+      pen.ctx.fillStyle = i % 2 === 0 ? runeStr : dimStr;
+      pen.drawPixel(x, y);
+      if (i % 2 === 0) { pen.drawPixel(x + 1, y); pen.drawPixel(x, y - 1); }
+      else { pen.drawPixel(x - 1, y); pen.drawPixel(x, y + 1); }
+    }
+  } else if (deco === "ferrule") {
+    // Mid-haft accent ferrule: a bright metal band girdling the shaft.
     const bd = anchorDiag * r.rangeFloat(0.4, 0.7);
     const c = diagToPosition(bd, bounds);
     const litStr = colorStr(accent.light);
@@ -214,18 +287,20 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
         pen.drawPixel(x, y);
       }
     }
+  } else if (deco === "wrap") {
+    // Haft wrap: a few dark leather bands across the shaft.
+    drawHaftWrap(pen, bounds, u, n, dscale, r, anchorDiag);
   }
 
-  // Haft wrap: a few dark leather bands across the shaft.
-  if (r.float() < 0.6) drawHaftWrap(pen, bounds, u, n, dscale, r, anchorDiag);
-
-  // Butt of the haft: end ring, or a capped pommel.
-  const butt = r.float();
-  if (butt < 0.4) {
+  // -- butt of the haft --------------------------------------------------------
+  if (butt === "ring") {
     drawEndRing(pen, bounds, dscale, accent.mid, accent.shadow);
-  } else if (butt < 0.75) {
+  } else if (butt === "cap") {
     const pr = Math.ceil((0.6 + r.floatLow() * 0.7) * dscale);
     pen.drawRoundOrnamentHelper({ center: new Vector(Math.floor(pr), Math.ceil(bounds.h - pr - 1)), radius: pr, colorLight: accent.light, colorDark: accent.shadow });
+  } else if (butt === "spike") {
+    const bu = new Vector(1, -1).normalize();
+    pen.fillCone(0, bounds.h - 1, -bu.x, -bu.y, 0, r.rangeFloat(3, 4.5) * dscale, Math.max(1, 1.1 * dscale), accent.light, accent.shadow);
   }
 
   pen.weather(r.floatLow() * 0.9); // battle-worn axe head
@@ -235,6 +310,33 @@ export function drawAxe(pen: Pen, parts?: AxeParts): void {
   if (gem) {
     const gc = new Vector(anchor.x + n.x * 1.5, anchor.y + n.y * 1.5);
     pen.drawGlow(gc, 3.2 * dscale, gem.light);
+  }
+}
+
+/**
+ * A rectangular block head in the (s = along haft, d = outward·sign) frame —
+ * a hammer poll / maul face. Bright striking face at the outer end, darker
+ * toward the socket, beveled top/bottom edges.
+ */
+function drawBlock(pen: Pen, anchor: Vector, u: Vector, n: Vector, sHalf: number, depth: number, metal: { light: Color; mid: Color; shadow: Color; spec: Color }, sign: number): void {
+  const B = pen.dimension;
+  for (let x = 0; x < B; x++) {
+    for (let y = 0; y < B; y++) {
+      const px = x - anchor.x;
+      const py = y - anchor.y;
+      const s = px * u.x + py * u.y;
+      const d = (px * n.x + py * n.y) * sign;
+      if (d < 0 || d > depth) continue;
+      if (Math.abs(s) > sHalf) continue;
+      const lat = Math.abs(s) / sHalf;
+      const out = d / depth;
+      let shade = 0.3 + 0.45 * out - 0.3 * Math.pow(lat, 2);
+      if (out > 0.82) shade += 0.35; // bright striking face
+      if (s > sHalf * 0.6) shade -= 0.18; // shadowed lower edge
+      shade = Math.max(0, Math.min(1, shade));
+      pen.ctx.fillStyle = colorStr(out > 0.94 && lat < 0.5 ? metal.spec : colorLerp(metal.shadow, metal.light, shade));
+      pen.drawPixel(x, y);
+    }
   }
 }
 
@@ -279,7 +381,7 @@ function drawFan(pen: Pen, anchor: Vector, u: Vector, n: Vector, p: FanParams, m
       const lat = sideHalf > 0 ? Math.min(1, Math.abs(s) / sideHalf) : 0;
       const edgeProx = cap > 0 ? d / cap : 0;
       const flare = d / p.depth;
-      let shade = 0.16 + 0.5 * flare;
+      let shade = 0.08 + 0.5 * flare;
       if (edgeProx > 0.72) shade += 0.7 * ((edgeProx - 0.72) / 0.28);
       shade -= 0.28 * Math.pow(lat, 1.7);
       shade = Math.max(0, Math.min(1, shade));

@@ -3,8 +3,8 @@ import { writeFileSync } from "node:fs";
 import { IconGenerator } from "../src/generator.ts";
 
 const GUARDS = [
-  "bar", "swept", "wings", "disc", "spiked", "hook", "hourglass",
-  "langets", "sidering", "trilobe", "cup", "starburst", "knucklebow", "basket", "none",
+  "bar", "vee", "swept", "winged", "balled", "spiked",
+  "oval", "ring", "cup", "shell", "plate", "knucklebow", "none",
 ];
 const dim = 40; // real list-icon nativeDim
 const seeds = 4;

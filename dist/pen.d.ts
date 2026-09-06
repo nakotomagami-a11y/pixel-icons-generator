@@ -79,9 +79,13 @@ export declare class Pen {
      * blades/heads read as USED, not factory-new. Interior-only (all 4 orthogonal
      * neighbours opaque) so it never nibbles the silhouette; the darkened pixels
      * snap to the material's shadow tone in {@link snapToPalette}. `amount` 0..1
-     * scales the scratch count. Call before {@link addBorder}.
+     * scales the scratch count. Call before {@link addBorder}. Pass
+     * `{ rust: false }` for non-ferrous surfaces (wood, bone, cloth) where an
+     * orange corrosion tint would read as stray red noise rather than wear.
      */
-    weather(amount: number): void;
+    weather(amount: number, opts?: {
+        rust?: boolean;
+    }): void;
     /**
      * Outline the silhouette. Selective (2-tone) like the pack: the near-black
      * `border` on shadowed (bottom-right) edges, a lifted navy on the top-left
@@ -119,6 +123,11 @@ export declare class Pen {
     };
     drawRodHelper(params: RodParams): void;
     drawRoundOrnamentHelper(params: OrnamentParams): void;
+    /** Small diamond/lozenge mark — same light-to-dark falloff as
+     *  {@link drawRoundOrnamentHelper} but Manhattan distance instead of
+     *  Euclidean, so it reads as an etched rhombus rather than a stud. Used to
+     *  stamp a row of diamond marks down a blade's centerline. */
+    drawDiamondOrnamentHelper(params: OrnamentParams): void;
 }
 /** Discrete blade-profile knobs. Absent → the original random meander. */
 export interface BladeStyle {
