@@ -21,41 +21,48 @@ export type IconClass = "blades" | "spears" | "axes" | "staffs" | "tridents" | "
  */
 export type IconClassSelector = IconClass | "any" | "anyweapon";
 /**
- * Explicit archetype overrides, one shape per weapon class. Each field is the
- * "headline" shape/hilt choice that defines what the weapon visually IS (e.g.
- * a sword's blade profile, an axe's head shape). Anything left `undefined`
- * still comes from `seed` via the normal random pick, same as before — only
- * the fields you set here are pinned. Small embellishments (gems, wraps,
- * weathering, colour) are intentionally NOT overridable here; they stay
- * randomized so a "Random" reroll still gives useful variety even with parts
- * locked in. `BladeParts.modification` is a deliberate carve-out from that
- * rule — see its doc comment.
+ * Explicit archetype overrides, one per visual layer of each weapon class.
+ * Anything left `undefined` still comes from `seed` via the normal random
+ * pick — only the fields you set here are pinned. Fine detail (exact colours,
+ * wear, sub-pixel sizing) stays seed-random on purpose, so a "Random" reroll
+ * with parts locked still gives useful variety.
+ *
+ * A persisted config can name a value that's since been removed/renamed —
+ * every generator falls back to a random pick on an unknown value rather
+ * than crash (see each draw function's sanitize step).
  */
 export interface BladeParts {
     profile?: BladeProfile;
     guard?: BladeGuard;
     pommel?: BladePommel;
     twoHanded?: boolean;
-    /**
-     * A shape cut into or added onto the blade — a base of one-off flourishes
-     * to make individual swords feel more unique, on top of the profile's own
-     * silhouette. Currently only applied to the `knight` profile (the plain
-     * arming-sword shape reads cleanest with an added flourish; other profiles
-     * already carry a strong identity of their own). Unlike every other blade
-     * embellishment this one IS overridable, by request — pick a specific look
-     * instead of rerolling the seed and hoping.
-     */
+    /** A decoration cut into or laid onto the blade itself — serrations,
+     *  fullers, rivets, glowing runes, inset gems… Applies to every profile. */
     modification?: BladeModification;
 }
 export interface AxeParts {
     head?: AxeHead;
+    /** What sits opposite the cutting bit — a rear spike, war-pick, hammer poll. */
+    back?: AxeBack;
+    /** The butt end of the haft. */
+    butt?: AxeButt;
+    /** Ornament applied to the head/haft. */
+    decoration?: AxeDecoration;
 }
 export interface SpearParts {
     head?: SpearHead;
+    /** The socket where head meets shaft — ferrule, langets, a set gem… */
+    collar?: SpearCollar;
+    /** The butt end of the shaft. */
+    butt?: SpearButt;
+    /** Cloth/ornament hung on the upper shaft. */
+    decoration?: SpearDecoration;
 }
 export interface StaffParts {
     head?: StaffHead;
     shaft?: StaffShaft;
+    /** Fittings bound onto the shaft — collars, wraps, leaves, charms. */
+    binding?: StaffBinding;
 }
 export interface TridentParts {
     type?: TridentType;
@@ -64,19 +71,34 @@ export interface ShieldParts {
     shape?: ShieldShape;
     blazon?: ShieldBlazon;
     emblem?: ShieldEmblem;
+    /** The frame around the field — a metal band, riveted edge, or bare. */
+    rim?: ShieldRim;
 }
 export type BladeProfile = "knight" | "broad" | "cleaver" | "rapier" | "flamberge" | "leaf" | "bowie" | "katana" | "dagger" | "barbed";
-export type BladeGuard = "bar" | "swept" | "wings" | "disc" | "none" | "spiked" | "hook" | "hourglass" | "langets" | "sidering" | "trilobe" | "cup" | "starburst" | "knucklebow" | "basket";
-export type BladePommel = "round" | "gem" | "none" | "wheel" | "ring" | "trefoil" | "acorn" | "scentstopper" | "spike" | "faceted" | "flanged" | "crown" | "birdhead";
-export type BladeModification = "none" | "serrated" | "notched" | "fullered" | "riveted" | "wavy";
-export type AxeHead = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd";
-export type SpearHead = "leaf" | "pike" | "broadleaf" | "winged" | "glaive" | "harpoon" | "needle" | "partisan" | "forked";
-export type StaffHead = "bare" | "claws" | "crescent" | "halo" | "wings" | "cluster" | "collar" | "loop";
-export type StaffShaft = "straight" | "twisted" | "wrapped" | "segmented";
+/**
+ * Hand-protection styles. Each is an explicit geometric construction (a bar,
+ * angled arms, a plate, a ring…) rather than a subtle retune of one wandering
+ * crossguard — so every value reads distinct at the app's real 40–60px.
+ */
+export type BladeGuard = "bar" | "vee" | "swept" | "winged" | "balled" | "spiked" | "oval" | "ring" | "cup" | "shell" | "plate" | "knucklebow" | "none";
+export type BladePommel = "round" | "gem" | "none" | "wheel" | "ring" | "trefoil" | "acorn" | "scentstopper" | "spike" | "faceted" | "flanged" | "crown" | "birdhead" | "crescent";
+export type BladeModification = "none" | "serrated" | "notched" | "fullered" | "riveted" | "wavy" | "fireTempered" | "runes" | "gems" | "etched";
+export type AxeHead = "fan" | "bearded" | "broad" | "double" | "crescent" | "halberd" | "warpick" | "hammer" | "greataxe" | "tomahawk";
+export type AxeBack = "none" | "spike" | "pick" | "hammer" | "hook";
+export type AxeButt = "none" | "ring" | "cap" | "spike";
+export type AxeDecoration = "none" | "gem" | "rivets" | "inlay" | "thongs" | "fuller" | "runes" | "notch" | "wrap" | "ferrule";
+export type SpearHead = "leaf" | "broadleaf" | "pike" | "winged" | "glaive" | "harpoon" | "needle" | "partisan" | "forked" | "flame" | "crescent" | "crystal";
+export type SpearCollar = "none" | "ferrule" | "banded" | "langets" | "gem" | "ring" | "winged" | "spiked";
+export type SpearButt = "none" | "cap" | "spike" | "ball" | "ring";
+export type SpearDecoration = "none" | "ribbons" | "pennant" | "tassel" | "wrap" | "gem" | "rings" | "feathers";
+export type StaffHead = "orb" | "crystal" | "cluster" | "crescent" | "halo" | "claws" | "wings" | "loop" | "crook" | "twinhorns" | "star" | "branch";
+export type StaffShaft = "straight" | "twisted" | "wrapped" | "segmented" | "gnarled" | "bone" | "metal" | "lacquer";
+export type StaffBinding = "none" | "collar" | "doublecollar" | "wrap" | "leaves" | "ribbons" | "charm" | "rings";
 export type TridentType = "trident" | "pitchfork";
-export type ShieldShape = "heater" | "kite" | "tower" | "round" | "crest" | "teardrop";
-export type ShieldBlazon = "plain" | "per-pale" | "per-bend" | "quarterly" | "chief";
-export type ShieldEmblem = "boss" | "gem" | "cross" | "star" | "chevron" | "none";
+export type ShieldShape = "heater" | "kite" | "tower" | "round" | "crest" | "teardrop" | "lozenge" | "hexagon" | "scallop" | "oval";
+export type ShieldBlazon = "planked" | "marble" | "hammered" | "bone" | "scaled" | "leather" | "weave" | "verdigris" | "crystal" | "half-vertical" | "half-horizontal" | "half-diagonal" | "quarters" | "stripes-vertical" | "stripes-horizontal" | "stripes-diagonal" | "checker" | "diamonds";
+export type ShieldEmblem = "boss" | "gem" | "cross" | "star" | "chevron" | "crescent" | "bolt" | "sun" | "ring" | "diamond" | "studs" | "none";
+export type ShieldRim = "none" | "metal" | "gold" | "riveted" | "dark" | "banded";
 /** Per-class part overrides, namespaced by {@link IconClass} so switching
  *  weapon type never loses a previous type's choices (they just go unused
  *  until you switch back). */

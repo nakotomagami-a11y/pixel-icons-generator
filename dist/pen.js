@@ -118,11 +118,14 @@ export class Pen {
      * blades/heads read as USED, not factory-new. Interior-only (all 4 orthogonal
      * neighbours opaque) so it never nibbles the silhouette; the darkened pixels
      * snap to the material's shadow tone in {@link snapToPalette}. `amount` 0..1
-     * scales the scratch count. Call before {@link addBorder}.
+     * scales the scratch count. Call before {@link addBorder}. Pass
+     * `{ rust: false }` for non-ferrous surfaces (wood, bone, cloth) where an
+     * orange corrosion tint would read as stray red noise rather than wear.
      */
-    weather(amount) {
+    weather(amount, opts = {}) {
         if (amount <= 0)
             return;
+        const allowRust = opts.rust ?? true;
         const w = this.dimension;
         const h = this.dimension;
         const ox = this.translation.x;
@@ -151,7 +154,7 @@ export class Pen {
             const dx = Math.cos(ang);
             const dy = Math.sin(ang);
             // Heavily-worn weapons corrode: some strokes are rust-tinted, not just dark.
-            const rust = r.float() < amount * 0.6;
+            const rust = allowRust && r.float() < amount * 0.6;
             for (let k = 0; k < len; k++) {
                 const px = Math.round(sx + dx * k);
                 const py = Math.round(sy + dy * k);
@@ -699,6 +702,27 @@ export class Pen {
                     const darkAmt = 1 - Math.min(1, (0.8 * shadowDist) / outerR);
                     const lightAmt = 1 - Math.min(1, highlightDist / outerR);
                     this.ctx.fillStyle = colorStr(colorLighten(colorLerp(pommelColorLight, pommelColorDark, darkAmt), lightAmt));
+                    this.drawPixel(x, y);
+                }
+            }
+        }
+    }
+    /** Small diamond/lozenge mark — same light-to-dark falloff as
+     *  {@link drawRoundOrnamentHelper} but Manhattan distance instead of
+     *  Euclidean, so it reads as an etched rhombus rather than a stud. Used to
+     *  stamp a row of diamond marks down a blade's centerline. */
+    drawDiamondOrnamentHelper(params) {
+        this.rng.checkpoint();
+        const r = this.rng;
+        const orn = pickGuardAccent(r);
+        const colorLight = params.colorLight ?? orn.light;
+        const colorDark = params.colorDark ?? orn.shadow;
+        const radius = params.radius;
+        for (let x = Math.floor(params.center.x - radius); x <= Math.ceil(params.center.x + radius); x++) {
+            for (let y = Math.floor(params.center.y - radius); y <= Math.ceil(params.center.y + radius); y++) {
+                const dist = Math.abs(x - params.center.x) + Math.abs(y - params.center.y);
+                if (dist <= radius) {
+                    this.ctx.fillStyle = colorStr(colorLerp(colorLight, colorDark, dist / radius));
                     this.drawPixel(x, y);
                 }
             }

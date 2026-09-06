@@ -29,11 +29,42 @@ export const STEEL = ramp("#4a5560", "#8c9695", "#b8c1c3", "#eef2f4");
 export const BLUED = ramp("#3b3f52", "#5e6f86", "#8c9695", "#c2ccce");
 export const GOLD = ramp("#7a5a30", "#c8a876", "#efe1ab", "#fff4cf");
 export const WOOD = ramp("#443528", "#7a5f48", "#a1856a", "#c0a586");
+/** Wood tone range for planked shields — pale pine → medium oak → walnut →
+ *  near-ebony, so a planked blazon can roll anywhere from light to dark timber.
+ *  All four are in {@link allTones} so the variation survives palette-snapping. */
+export const WOOD_PALE = ramp("#6b5334", "#a07f52", "#cbab74", "#ecd6a4");
+export const WOOD_WALNUT = ramp("#3a2718", "#5e4028", "#8a6440", "#ac845a");
+export const WOOD_EBONY = ramp("#241812", "#402a1c", "#63452e", "#856046");
+export const WOODS: Ramp[] = [WOOD_PALE, WOOD, WOOD, WOOD_WALNUT, WOOD_EBONY];
+export const pickWood = (r: Rng): Ramp => WOODS[Math.floor(r.float() * WOODS.length) % WOODS.length]!;
 export const DARK = ramp("#20202e", "#3a384a", "#5a5560", "#736e7a"); // leather / dark metal
 export const BONE = ramp("#8a8168", "#c9c0a0", "#e6ddbf", "#f5eed6");
+/** Bone tone range — fresh ivory → aged yellow-bone → ashen grey → weathered
+ *  dark bone — so a bone blazon can roll a few states of age. All in
+ *  {@link allTones} so the variation survives palette-snapping. */
+export const BONE_IVORY = ramp("#8f8a7c", "#d8d2c0", "#f0ebdc", "#fbf8f0");
+export const BONE_ASH = ramp("#59544a", "#8d8574", "#bdb39c", "#e2d8c0");
+export const BONE_DARK = ramp("#443c2e", "#6e6450", "#948870", "#b8ab90");
+export const BONES: Ramp[] = [BONE_IVORY, BONE, BONE, BONE_ASH, BONE_DARK];
+export const pickBone = (r: Rng): Ramp => BONES[Math.floor(r.float() * BONES.length) % BONES.length]!;
 export const BRONZE = ramp("#5e3f28", "#9a6a3e", "#c89058", "#e8c088"); // warm copper blade
+export const COPPER = ramp("#5a2e1c", "#a0512e", "#d07a44", "#f0a86a"); // reddish copper
+export const BRASS = ramp("#5e4a1c", "#a8842f", "#d8b24e", "#f2dd8a"); // yellow brass
 export const DARKIRON = ramp("#242833", "#414756", "#6a7080", "#9aa4b4"); // near-black steel
+/** Beaten-metal range for hammered shields (bronze/copper/brass/steel/iron). */
+export const HAMMERED_METALS: Ramp[] = [BRONZE, BRONZE, COPPER, BRASS, STEEL, DARKIRON];
+export const pickHammeredMetal = (r: Rng): Ramp => HAMMERED_METALS[Math.floor(r.float() * HAMMERED_METALS.length) % HAMMERED_METALS.length]!;
 export const RUST = ramp("#38200f", "#6e3c1e", "#94592c", "#b87a40"); // corrosion / patina spots
+export const VERDIGRIS = ramp("#123f36", "#2f7a64", "#5cb494", "#a8e6cc"); // weathered copper-green patina
+
+/** Polished marble — `shadow` is the vein colour, `mid`→`spec` the stone body.
+ *  White, rose and sage variants so a marble shield can roll a few stone types.
+ *  All in {@link allTones} so the veins survive palette-snapping. */
+export const MARBLE_WHITE = ramp("#3a3d47", "#a6abb6", "#dfe2e8", "#f6f8fc");
+export const MARBLE_ROSE = ramp("#5e343e", "#c79aa0", "#ecccce", "#fce8ea");
+export const MARBLE_SAGE = ramp("#37463a", "#a3b4a4", "#d6e2d4", "#f2f8f0");
+export const MARBLES: Ramp[] = [MARBLE_WHITE, MARBLE_WHITE, MARBLE_ROSE, MARBLE_SAGE];
+export const pickMarble = (r: Rng): Ramp => MARBLES[Math.floor(r.float() * MARBLES.length) % MARBLES.length]!;
 
 /** Cloth banners / ribbon streamers hung on polearms. */
 export const RIBBONS: Ramp[] = [
@@ -51,6 +82,12 @@ export const CRYSTALS: Ramp[] = [
   ramp("#33184f", "#7a3fb0", "#b880e8", "#ecd6ff"), // amethyst
 ];
 export const pickCrystal = (r: Rng): Ramp => CRYSTALS[Math.floor(r.float() * CRYSTALS.length) % CRYSTALS.length]!;
+
+/** Heat-tempered blade: the hilt-to-tip gradient `drawBladeHelper` already
+ *  does (mid → light along `normalizedDist`) is enough to read as a
+ *  fire-quenched blade on its own — dark red at the base fading to a hot
+ *  yellow-white at the tip — no shape change needed, just this ramp. */
+export const FIRE_TEMPERED: Ramp = ramp("#3a0f08", "#c23a1a", "#ffcf6b", "#fff2c2");
 
 /** Painted heraldic shield fields — vivid lacquer/cloth-over-wood colours, kept
  *  distinct from the metal/wood/bone/gem families so a painted shield reads as
@@ -97,6 +134,6 @@ export const pickGem = (r: Rng): Ramp => pick(r, GEMS);
  *  budget and turns continuous shader gradients into hard cel bands. */
 export function allTones(): Color[] {
   const out: Color[] = [];
-  for (const rp of [STEEL, BLUED, GOLD, WOOD, DARK, BONE, BRONZE, DARKIRON, RUST, ...RIBBONS, ...CRYSTALS, ...GEMS, ...SHIELD_PAINTS]) out.push(rp.shadow, rp.mid, rp.light, rp.spec);
+  for (const rp of [STEEL, BLUED, GOLD, WOOD, WOOD_PALE, WOOD_WALNUT, WOOD_EBONY, DARK, BONE, BONE_IVORY, BONE_ASH, BONE_DARK, BRONZE, COPPER, BRASS, DARKIRON, RUST, VERDIGRIS, FIRE_TEMPERED, MARBLE_WHITE, MARBLE_ROSE, MARBLE_SAGE, ...RIBBONS, ...CRYSTALS, ...GEMS, ...SHIELD_PAINTS]) out.push(rp.shadow, rp.mid, rp.light, rp.spec);
   return out;
 }

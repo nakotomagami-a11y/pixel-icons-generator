@@ -1,73 +1,199 @@
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorDarken, colorLerp, colorLighten, colorStr } from "../color";
-import { WOOD, DARK, BONE, BLUED, GOLD, STEEL, pickGem } from "../palette";
+import { WOOD, DARK, BONE, BLUED, GOLD, STEEL, pickGem, RIBBONS } from "../palette";
 /**
- * Mix-and-match staff: a worked shaft (straight / twisted / wrapped / segmented,
- * in wood / dark metal / bone / lacquer) topped by a magical head — a gem held in
- * one of several settings: bare, gripping claws, a crescent moon, a halo ring,
- * flanking wings, or a raw crystal cluster — finished with a glow, sparkles, and
- * optional nature leaves. Head/shaft archetypes derived from staff reference art.
+ * Mix-and-match staff, layer by layer, rebuilt from the ground up: a SHAFT
+ * (straight / twisted / wrapped / segmented / gnarled / bone / metal /
+ * lacquer) along the bottom-left→top-right diagonal, a magical HEAD topping
+ * it (orb, crystal shard, cluster, crescent moon, halo, claws, wings, ankh
+ * loop, shepherd's crook, twin horns, star, living branch), and a BINDING
+ * bound onto the shaft (collars, cord wraps, leaves, ribbons, a hanging
+ * charm…). Every layer is an independent pick so the dropdowns compose.
  */
 const pick = (r, arr) => arr[Math.floor(r.float() * arr.length) % arr.length];
-const HEADS = ["bare", "claws", "claws", "crescent", "halo", "wings", "cluster", "collar", "collar", "loop", "loop"];
-const SHAFTS = ["straight", "twisted", "twisted", "wrapped", "segmented", "straight"];
+const HEADS = [
+    "orb", "orb", "crystal", "cluster", "crescent", "halo", "claws", "claws",
+    "wings", "loop", "crook", "twinhorns", "star", "branch",
+];
+const SHAFTS = ["straight", "straight", "twisted", "wrapped", "segmented", "gnarled", "bone", "metal", "lacquer"];
+const BINDINGS = ["none", "none", "none", "collar", "collar", "doublecollar", "wrap", "leaves", "ribbons", "charm", "rings"];
+/** Legacy head names from the pre-rework generator. */
+const LEGACY_HEADS = { bare: "orb", collar: "orb" };
+/** Heads that centre on a gem (get glow + sparkles). */
+const GEM_HEADS = new Set(["orb", "crystal", "cluster", "crescent", "halo", "claws", "wings", "star"]);
 export function drawStaff(pen, parts) {
     pen.rng.checkpoint();
     const r = pen.rng;
     const bounds = new Bounds(0, 0, pen.dimension, pen.dimension);
     const dscale = bounds.h / 32;
     pen.clearCanvas();
-    const isWand = r.float() < 0.35;
-    const gemRadius = (isWand ? r.rangeFloat(2.4, 3.4) : r.rangeFloat(3.6, 5.4)) * dscale;
+    const requestedHead = parts?.head;
+    const head = requestedHead && HEADS.includes(requestedHead)
+        ? requestedHead
+        : requestedHead && requestedHead in LEGACY_HEADS
+            ? LEGACY_HEADS[requestedHead]
+            : pick(r, HEADS);
+    const shaft = parts?.shaft && SHAFTS.includes(parts.shaft) ? parts.shaft : pick(r, SHAFTS);
+    const binding = parts?.binding && BINDINGS.includes(parts.binding) ? parts.binding : pick(r, BINDINGS);
+    const isWand = r.float() < 0.25;
+    const gemRadius = (isWand ? r.rangeFloat(2.4, 3.4) : r.rangeFloat(3.6, 5.2)) * dscale;
     const haftMaxRadius = (isWand ? r.rangeFloat(0.9, 1.4) : r.rangeFloat(1.4, 2.2)) * dscale;
-    const head = parts?.head ?? pick(r, HEADS);
-    const shaft = parts?.shaft ?? pick(r, SHAFTS);
     const gemOrtho = bounds.h - 1 - Math.ceil(gemRadius * 1.25) - 1;
     const gemCenter = new Vector(gemOrtho, bounds.h - 1 - gemOrtho);
-    // Shaft material + haft.
-    const mat = r.float();
-    const haftColor = mat < 0.4 ? WOOD.mid : mat < 0.64 ? DARK.mid : mat < 0.84 ? BONE.mid : BLUED.shadow;
-    const isWood = mat < 0.4;
+    const u = new Vector(1, -1).normalize(); // toward the head
+    const n = new Vector(-1, -1).normalize(); // outward (top-left)
+    // -- shaft -------------------------------------------------------------------
+    // Material follows the shaft pick where it implies one; otherwise rolled.
+    let haftColor;
+    let isWood = false;
+    if (shaft === "bone")
+        haftColor = BONE.mid;
+    else if (shaft === "metal")
+        haftColor = r.float() < 0.5 ? BLUED.mid : STEEL.mid;
+    else if (shaft === "lacquer")
+        haftColor = DARK.mid;
+    else {
+        const mat = r.float();
+        haftColor = mat < 0.55 ? WOOD.mid : mat < 0.75 ? DARK.mid : mat < 0.9 ? BONE.mid : BLUED.shadow;
+        isWood = mat < 0.55;
+    }
+    if (shaft === "gnarled" || shaft === "twisted") {
+        haftColor = WOOD.mid;
+        isWood = true;
+    }
     const haftTopDiag = (gemOrtho - gemRadius * 0.4) * Math.SQRT2;
     pen.drawHaftHelper({ startDiag: 0, lengthDiag: haftTopDiag, maxRadius: haftMaxRadius, fractionalRadiusAllowed: true, color: haftColor });
     const metalRamp = r.float() < 0.55 ? GOLD : STEEL;
     const metal = metalRamp.light;
     const metalDark = metalRamp.shadow;
-    // Worked shaft overlays.
-    if (shaft === "twisted")
+    // Shaft working overlays.
+    if (shaft === "twisted") {
         twistShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, haftColor);
+    }
     else if (shaft === "wrapped") {
         pen.drawGripHelper({ startDiag: haftTopDiag * r.rangeFloat(0.2, 0.4), lengthDiag: haftTopDiag * r.rangeFloat(0.18, 0.3), minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.7 * dscale, fractionalRadiusAllowed: true });
     }
     else if (shaft === "segmented") {
-        // Bound grip: a cord wrap FRAMED by a metal ferrule at each end — a proper
-        // decorated staff, not scattered gold dots.
+        // Bound grip framed by a metal ferrule at each end.
         const gripStart = haftTopDiag * r.rangeFloat(0.26, 0.4);
         const gripLen = haftTopDiag * r.rangeFloat(0.2, 0.32);
         pen.drawGripHelper({ startDiag: gripStart, lengthDiag: gripLen, minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.6 * dscale, fractionalRadiusAllowed: true });
         drawShaftRing(pen, bounds, gripStart, haftMaxRadius + 0.6 * dscale, dscale, metal, metalDark);
         drawShaftRing(pen, bounds, gripStart + gripLen, haftMaxRadius + 0.6 * dscale, dscale, metal, metalDark);
     }
-    else {
-        // Straight: at most a single tidy ferrule near the neck (not a bead ladder).
-        if (r.float() < 0.5)
-            drawShaftRing(pen, bounds, haftTopDiag * r.rangeFloat(0.55, 0.72), haftMaxRadius, dscale, metal, metalDark);
+    else if (shaft === "gnarled") {
+        gnarlShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, r);
+    }
+    else if (shaft === "bone") {
+        // Vertebral joints: paired darker rings spaced down the shaft.
+        const nJoint = 3;
+        for (let i = 0; i < nJoint; i++) {
+            const d = haftTopDiag * (0.25 + 0.22 * i);
+            drawShaftRing(pen, bounds, d, haftMaxRadius + 0.2 * dscale, dscale, BONE.light, BONE.shadow);
+            drawShaftRing(pen, bounds, d + 1.6 * dscale, haftMaxRadius + 0.1 * dscale, dscale, BONE.mid, BONE.shadow);
+        }
+    }
+    else if (shaft === "metal") {
+        // A bright specular line down the lit side of the shaft.
+        const litStr = colorStr(STEEL.spec);
+        for (let l = 3 * dscale; l < haftTopDiag / Math.SQRT2 - 2; l += 1) {
+            const x = Math.round(l + n.x * haftMaxRadius * 0.4);
+            const y = Math.round(bounds.h - 1 - l + n.y * haftMaxRadius * 0.4);
+            if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h)
+                continue;
+            if (pen.ctx.getImageData(x, y, 1, 1).data[3] === 0)
+                continue;
+            pen.ctx.fillStyle = litStr;
+            pen.drawPixel(x, y);
+        }
+    }
+    else if (shaft === "lacquer") {
+        // Glossy black: a thin highlight stripe + gold ferrule near each end.
+        const litStr = colorStr(colorLighten(DARK.light, 0.3));
+        for (let l = 4 * dscale; l < haftTopDiag / Math.SQRT2 - 3; l += 1) {
+            if (Math.floor(l / (3 * dscale)) % 2 === 0)
+                continue; // broken gloss
+            const x = Math.round(l + n.x * haftMaxRadius * 0.3);
+            const y = Math.round(bounds.h - 1 - l + n.y * haftMaxRadius * 0.3);
+            if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h)
+                continue;
+            if (pen.ctx.getImageData(x, y, 1, 1).data[3] === 0)
+                continue;
+            pen.ctx.fillStyle = litStr;
+            pen.drawPixel(x, y);
+        }
+        drawShaftRing(pen, bounds, haftTopDiag * 0.16, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
+        drawShaftRing(pen, bounds, haftTopDiag * 0.8, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
+    }
+    // -- binding -----------------------------------------------------------------
+    if (binding === "collar") {
+        drawShaftRing(pen, bounds, haftTopDiag * r.rangeFloat(0.55, 0.72), haftMaxRadius, dscale, metal, metalDark);
+    }
+    else if (binding === "doublecollar") {
+        const d0 = haftTopDiag * r.rangeFloat(0.5, 0.62);
+        drawShaftRing(pen, bounds, d0, haftMaxRadius, dscale, metal, metalDark);
+        drawShaftRing(pen, bounds, d0 + 2.4 * dscale, haftMaxRadius, dscale, metal, metalDark);
+    }
+    else if (binding === "wrap") {
+        pen.drawGripHelper({ startDiag: haftTopDiag * r.rangeFloat(0.3, 0.45), lengthDiag: haftTopDiag * r.rangeFloat(0.12, 0.2), minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.5 * dscale, fractionalRadiusAllowed: true });
+    }
+    else if (binding === "leaves") {
+        const leafBase = diagToPosition((gemOrtho - gemRadius * 1.3) * Math.SQRT2, bounds);
+        const green = { shadow: { r: 0x2f, g: 0x5a, b: 0x2e }, light: { r: 0x6f, g: 0xb0, b: 0x4a } };
+        for (const side of [-1, 1]) {
+            const a = -Math.PI / 4 + side * 1.3;
+            pen.fillCone(leafBase.x, leafBase.y, Math.cos(a), Math.sin(a), 0, r.rangeFloat(3, 5) * dscale, Math.max(1.2, 1.3 * dscale), green.light, green.shadow);
+        }
+    }
+    else if (binding === "ribbons") {
+        const cloth = pick(r, RIBBONS);
+        const rootDiag = (gemOrtho - gemRadius * 0.9) * Math.SQRT2;
+        const rp = diagToPosition(rootDiag, bounds);
+        for (const side of [0.5, -0.6]) {
+            const dir = { x: -u.x + n.x * side, y: -u.y + n.y * side };
+            const m = Math.hypot(dir.x, dir.y);
+            pen.drawRibbon(rp.x, rp.y, dir.x / m, dir.y / m, r.rangeFloat(5, 7) * dscale, Math.max(1.4, 1.4 * dscale), cloth, { wave: 1.6 * dscale, waveLen: 6 * dscale, taper: true, twist: true });
+        }
+    }
+    else if (binding === "charm") {
+        // A small gem dangling on a short cord below the head.
+        const g = pickGem(r);
+        const rootDiag = (gemOrtho - gemRadius * 0.8) * Math.SQRT2;
+        const rp = diagToPosition(rootDiag, bounds);
+        const cordStr = colorStr(DARK.mid);
+        const drop = 3.2 * dscale;
+        for (let l = 0; l <= drop; l += 0.5) {
+            pen.ctx.fillStyle = cordStr;
+            pen.drawPixel(Math.round(rp.x + n.x * 0.4 * l - u.x * 0.9 * l), Math.round(rp.y + n.y * 0.4 * l - u.y * 0.9 * l));
+        }
+        pen.drawRoundOrnamentHelper({
+            center: new Vector(rp.x + n.x * 0.4 * drop - u.x * 0.9 * drop, rp.y + n.y * 0.4 * drop - u.y * 0.9 * drop),
+            radius: Math.max(1, 1 * dscale),
+            colorLight: g.light,
+            colorDark: g.shadow,
+        });
+    }
+    else if (binding === "rings") {
+        for (let i = 0; i < 3; i++) {
+            drawShaftRing(pen, bounds, haftTopDiag * (0.3 + 0.18 * i), haftMaxRadius, dscale, metal, metalDark);
+        }
     }
     // Base finial.
     if (r.float() < 0.7) {
         const baseR = haftMaxRadius + 0.4 * dscale;
         pen.drawRoundOrnamentHelper({ center: new Vector(Math.floor(baseR) + 1, Math.ceil(bounds.h - baseR - 2)), radius: baseR, colorLight: metal, colorDark: metalDark });
     }
-    // Gem palette.
+    // -- head --------------------------------------------------------------------
     const gemR = pickGem(r);
     const gemLight = gemR.mid, gemDark = gemR.shadow, gemCore = gemR.light, spec = gemR.spec;
-    // --- Head setting: parts drawn BEHIND the gem first ---
+    // Settings drawn BEHIND the gem first.
     if (head === "halo") {
         drawRingShape(pen, bounds, gemCenter.x, gemCenter.y, gemRadius * 1.5, Math.max(0.9, 0.7 * dscale), metal, metalDark);
     }
     else if (head === "crescent") {
-        // A moon cradling the gem from behind: an arc opening toward the shaft.
-        drawArc(pen, bounds, gemCenter.x, gemCenter.y, gemRadius * 1.55, gemRadius * 0.55, (-Math.PI * 3) / 4 - 1.1, (-Math.PI * 3) / 4 + 1.1, metal, metalDark);
+        // A metal moon cradling the gem from behind: a thick arc opening toward
+        // the shaft, horns reaching past the gem.
+        drawArc(pen, bounds, gemCenter.x, gemCenter.y, gemRadius * 1.6, gemRadius * 0.6, (-Math.PI * 3) / 4 - 1.25, (-Math.PI * 3) / 4 + 1.25, metal, metalDark);
     }
     else if (head === "wings") {
         for (const side of [-1, 1]) {
@@ -75,20 +201,25 @@ export function drawStaff(pen, parts) {
             pen.fillCone(gemCenter.x, gemCenter.y, Math.cos(a), Math.sin(a), gemRadius * 0.5, gemRadius * 1.5, Math.max(1.4, gemRadius * 0.5), metal, metalDark);
         }
     }
-    // Collar ring at the shaft/gem join (also for bare/claws sometimes).
-    if (head === "collar" || (head !== "cluster" && r.float() < 0.4)) {
-        drawShaftRing(pen, bounds, (gemOrtho - gemRadius * 0.7) * Math.SQRT2, haftMaxRadius + 0.4 * dscale, dscale, metal, metalDark);
+    else if (head === "twinhorns") {
+        // Two horns sweeping up-out from the shaft top, cradling a small gem.
+        const base = diagToPosition((gemOrtho - gemRadius * 0.5) * Math.SQRT2, bounds);
+        for (const side of [-1, 1]) {
+            const a1 = -Math.PI / 4 + side * 1.05; // out
+            const e1x = base.x + Math.cos(a1) * gemRadius * 1.05;
+            const e1y = base.y + Math.sin(a1) * gemRadius * 1.05;
+            pen.fillCone(base.x, base.y, Math.cos(a1), Math.sin(a1), 0, gemRadius * 1.1, Math.max(1.3, gemRadius * 0.34), metal, metalDark);
+            const a2 = -Math.PI / 4 + side * 0.35; // then curl up toward the tip
+            pen.fillCone(e1x, e1y, Math.cos(a2), Math.sin(a2), 0, gemRadius * 1.25, Math.max(1.1, gemRadius * 0.3), metal, metalDark);
+        }
     }
-    // --- The gem(s) ---
+    // The gem / centrepiece.
     if (head === "loop") {
-        // Ankh-style loop finial: a metal ring topping the shaft, with a small gem
-        // (or hollow) inside — no big orb.
         drawRingShape(pen, bounds, gemCenter.x, gemCenter.y, gemRadius * 1.05, Math.max(1, 0.9 * dscale), metal, metalDark);
         if (r.float() < 0.6)
             drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius * 0.42, gemDark, gemLight, gemCore, spec);
     }
     else if (head === "cluster") {
-        // Raw crystal cluster: a central shard plus two smaller ones.
         drawFacet(pen, gemCenter.x, gemCenter.y, gemRadius, gemDark, gemLight, gemCore, spec);
         for (const side of [-1, 1]) {
             const a = -Math.PI / 4 + side * 0.9;
@@ -96,13 +227,92 @@ export function drawStaff(pen, parts) {
             drawFacet(pen, sc.x, sc.y, gemRadius * 0.6, gemDark, gemLight, gemCore, spec);
         }
     }
-    else if (r.float() < 0.42) {
+    else if (head === "crystal") {
+        // One big shard, elongated along the shaft axis: a facet stretched by
+        // drawing it twice with a slight offset toward the tip.
+        drawFacet(pen, gemCenter.x - u.x * gemRadius * 0.3, gemCenter.y - u.y * gemRadius * 0.3, gemRadius * 0.85, gemDark, gemLight, gemCore, spec);
+        drawFacet(pen, gemCenter.x + u.x * gemRadius * 0.45, gemCenter.y + u.y * gemRadius * 0.45, gemRadius * 0.8, gemDark, gemLight, gemCore, spec);
+    }
+    else if (head === "crook") {
+        // A shepherd's crook: the shaft continues into a curling spiral. No gem.
+        const start = diagToPosition(haftTopDiag, bounds);
+        const half = Math.max(1, haftMaxRadius * 0.8);
+        const turns = r.rangeFloat(3.6, 4.6);
+        const rad0 = gemRadius * 1.15;
+        const steps = 26;
+        const litStr = haftColor;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const ang = -Math.PI * 0.75 + t * turns; // start pointing up-right, curl over
+            const rad = rad0 * (1 - 0.55 * t);
+            const cx = start.x + u.x * rad0 * 0.4 + Math.cos(ang) * rad * 0.0 + Math.sin(ang) * 0; // placeholder, replaced below
+            void cx;
+            // Spiral centre sits above the shaft top.
+            const scx = start.x + u.x * rad0 * 0.9;
+            const scy = start.y + u.y * rad0 * 0.9;
+            const px = scx + Math.cos(ang) * rad;
+            const py = scy + Math.sin(ang) * rad;
+            for (let ox = -half; ox <= half; ox += 0.5) {
+                for (let oy = -half; oy <= half; oy += 0.5) {
+                    if (Math.hypot(ox, oy) > half)
+                        continue;
+                    const x = Math.round(px + ox);
+                    const y = Math.round(py + oy);
+                    if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h)
+                        continue;
+                    pen.ctx.fillStyle = colorStr(oy < 0 ? colorLighten(litStr, 0.2) : colorDarken(litStr, 0.2));
+                    pen.drawPixel(x, y);
+                }
+            }
+        }
+    }
+    else if (head === "star") {
+        // A radiant star: beveled rays in the gem colour + a bright core.
+        const rayLen = gemRadius * 1.15;
+        for (let i = 0; i < 4; i++) {
+            const a = -Math.PI / 4 + (i / 4) * Math.PI * 2;
+            pen.fillCone(gemCenter.x, gemCenter.y, Math.cos(a), Math.sin(a), 0, rayLen, Math.max(1.2, gemRadius * 0.32), gemLight, gemDark);
+        }
+        for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2;
+            pen.fillCone(gemCenter.x, gemCenter.y, Math.cos(a), Math.sin(a), 0, rayLen * 0.6, Math.max(1, gemRadius * 0.24), gemLight, gemDark);
+        }
+        drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius * 0.45, gemDark, gemLight, gemCore, spec);
+    }
+    else if (head === "branch") {
+        // Living wood: the shaft forks into twigs with leaves, a small gem
+        // nested at the fork.
+        const base = diagToPosition(haftTopDiag, bounds);
+        const green = { shadow: { r: 0x2f, g: 0x5a, b: 0x2e }, light: { r: 0x6f, g: 0xb0, b: 0x4a } };
+        for (const side of [-0.9, 0.15, 0.9]) {
+            const dir = { x: u.x + n.x * side * 0.7, y: u.y + n.y * side * 0.7 };
+            const m = Math.hypot(dir.x, dir.y);
+            const len = r.rangeFloat(4.5, 6.5) * dscale;
+            pen.fillCone(base.x, base.y, dir.x / m, dir.y / m, 0, len, Math.max(1, haftMaxRadius * 0.7), WOOD.light, WOOD.shadow);
+            // A leaf at each twig's end.
+            const lx = base.x + (dir.x / m) * len * 0.9;
+            const ly = base.y + (dir.y / m) * len * 0.9;
+            pen.fillCone(lx, ly, dir.x / m, dir.y / m, 0, 2.6 * dscale, Math.max(1.2, 1.2 * dscale), green.light, green.shadow);
+        }
+        drawOrb(pen, base.x + u.x * 1.5 * dscale, base.y + u.y * 1.5 * dscale, gemRadius * 0.4, gemDark, gemLight, gemCore, spec);
+    }
+    else if (head === "twinhorns") {
+        drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius * 0.5, gemDark, gemLight, gemCore, spec);
+    }
+    else if (head === "orb") {
+        drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius, gemDark, gemLight, gemCore, spec);
+    }
+    else if (r.float() < 0.42 && head !== "claws") {
         drawFacet(pen, gemCenter.x, gemCenter.y, gemRadius, gemDark, gemLight, gemCore, spec);
     }
     else {
-        drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius, gemDark, gemLight, gemCore, spec);
+        drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius * (head === "crescent" ? 0.85 : 1), gemDark, gemLight, gemCore, spec);
     }
-    // --- Head setting: parts drawn OVER the gem (claw tips read in front) ---
+    // Collar ring at the shaft/gem join for gem-carrying settings.
+    if (GEM_HEADS.has(head) && head !== "cluster" && r.float() < 0.4) {
+        drawShaftRing(pen, bounds, (gemOrtho - gemRadius * 0.7) * Math.SQRT2, haftMaxRadius + 0.4 * dscale, dscale, metal, metalDark);
+    }
+    // Settings drawn OVER the gem (claw tips read in front).
     if (head === "claws") {
         const clawBase = diagToPosition((gemOrtho - gemRadius * 0.6) * Math.SQRT2, bounds);
         const clawHalf = Math.max(1, 0.85 * dscale);
@@ -112,25 +322,18 @@ export function drawStaff(pen, parts) {
             pen.fillCone(clawBase.x, clawBase.y, Math.cos(a), Math.sin(a), gemRadius * 0.4, gemRadius * 1.5, clawHalf, metal, metalDark);
         }
     }
-    // Nature leaves near the top for wooden staves.
-    if (isWood && r.float() < 0.45) {
-        const leafBase = diagToPosition((gemOrtho - gemRadius * 1.3) * Math.SQRT2, bounds);
-        const green = { shadow: { r: 0x2f, g: 0x5a, b: 0x2e }, light: { r: 0x6f, g: 0xb0, b: 0x4a } };
-        for (const side of [-1, 1]) {
-            const a = -Math.PI / 4 + side * 1.3;
-            pen.fillCone(leafBase.x, leafBase.y, Math.cos(a), Math.sin(a), 0, r.rangeFloat(3, 5) * dscale, Math.max(1.2, 1.3 * dscale), green.light, green.shadow);
-        }
-    }
     pen.addBorder();
-    // Bloom + sparkles over the outline.
-    if (isWand || r.float() < 0.6)
-        pen.drawGlow(gemCenter, gemRadius * 2.4, gemLight);
-    if (r.float() < 0.72) {
-        const nSpark = r.range(1, 4);
-        for (let i = 0; i < nSpark; i++) {
-            const a = -Math.PI / 2 + r.rangeFloat(-1.4, 1.4);
-            const dist = gemRadius * (0.55 + 0.55 * r.float());
-            drawSparkle(pen, Math.round(gemCenter.x + Math.cos(a) * dist), Math.round(gemCenter.y + Math.sin(a) * dist), r.range(1, 3), spec);
+    // Bloom + sparkles over the outline, for the gem-centred heads.
+    if (GEM_HEADS.has(head)) {
+        if (isWand || r.float() < 0.6)
+            pen.drawGlow(gemCenter, gemRadius * 2.4, gemLight);
+        if (r.float() < 0.72) {
+            const nSpark = r.range(1, 4);
+            for (let i = 0; i < nSpark; i++) {
+                const a = -Math.PI / 2 + r.rangeFloat(-1.4, 1.4);
+                const dist = gemRadius * (0.55 + 0.55 * r.float());
+                drawSparkle(pen, Math.round(gemCenter.x + Math.cos(a) * dist), Math.round(gemCenter.y + Math.sin(a) * dist), r.range(1, 3), spec);
+            }
         }
     }
 }
@@ -151,6 +354,28 @@ function twistShaft(pen, bounds, topDiag, haftR, dscale, base) {
             continue;
         pen.ctx.fillStyle = Math.cos(l / wave) > 0 ? litStr : darkStr;
         pen.drawPixel(x, y);
+    }
+}
+/** Knots and bumps down a wooden shaft → gnarled driftwood. */
+function gnarlShaft(pen, bounds, topDiag, haftR, dscale, r) {
+    const nKnot = r.range(3, 6);
+    for (let i = 0; i < nKnot; i++) {
+        const l = (topDiag / Math.SQRT2) * (0.15 + 0.7 * (i / nKnot) + r.rangeFloat(0, 0.08));
+        const side = r.sign();
+        const cx = l + Math.SQRT1_2 * side * haftR * 0.8;
+        const cy = bounds.h - 1 - l + Math.SQRT1_2 * side * haftR * 0.8;
+        // A small woody nub bulging off the shaft.
+        pen.drawRoundOrnamentHelper({
+            center: new Vector(cx, cy),
+            radius: Math.max(1, r.rangeFloat(0.8, 1.3) * dscale),
+            colorLight: WOOD.light,
+            colorDark: WOOD.shadow,
+        });
+        // A dark knot eye.
+        if (r.float() < 0.5) {
+            pen.ctx.fillStyle = colorStr(WOOD.shadow);
+            pen.drawPixel(Math.round(cx), Math.round(cy));
+        }
     }
 }
 /** Filled metal ring (halo) behind the gem. */
