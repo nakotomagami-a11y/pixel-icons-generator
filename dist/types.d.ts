@@ -63,6 +63,8 @@ export interface StaffParts {
     shaft?: StaffShaft;
     /** Fittings bound onto the shaft — collars, wraps, leaves, charms. */
     binding?: StaffBinding;
+    /** The butt/foot fitting at the base of the staff. */
+    foot?: StaffFoot;
 }
 export interface TridentParts {
     type?: TridentType;
@@ -88,17 +90,19 @@ export type AxeBack = "none" | "spike" | "pick" | "hammer" | "hook";
 export type AxeButt = "none" | "ring" | "cap" | "spike";
 export type AxeDecoration = "none" | "gem" | "rivets" | "inlay" | "thongs" | "fuller" | "runes" | "notch" | "wrap" | "ferrule";
 export type SpearHead = "leaf" | "broadleaf" | "pike" | "winged" | "glaive" | "harpoon" | "needle" | "partisan" | "forked" | "flame" | "crescent" | "crystal";
-export type SpearCollar = "none" | "ferrule" | "banded" | "langets" | "gem" | "ring" | "winged" | "spiked";
+export type SpearCollar = "none" | "ferrule" | "sleeve" | "langets" | "gem" | "ring" | "winged" | "spiked";
 export type SpearButt = "none" | "cap" | "spike" | "ball" | "ring";
-export type SpearDecoration = "none" | "ribbons" | "pennant" | "tassel" | "wrap" | "gem" | "rings" | "feathers";
+export type SpearDecoration = "none" | "ribbons" | "pennant" | "tassel" | "wrap" | "gem" | "charm" | "feathers";
 export type StaffHead = "orb" | "crystal" | "cluster" | "crescent" | "halo" | "claws" | "wings" | "loop" | "crook" | "twinhorns" | "star" | "branch";
-export type StaffShaft = "straight" | "twisted" | "wrapped" | "segmented" | "gnarled" | "bone" | "metal" | "lacquer";
-export type StaffBinding = "none" | "collar" | "doublecollar" | "wrap" | "leaves" | "ribbons" | "charm" | "rings";
+export type StaffShaft = "straight" | "twisted" | "wrapped" | "spiral" | "gnarled" | "bone" | "metal" | "lacquer";
+export type StaffBinding = "none" | "collar" | "wrap" | "spiralcord" | "leaves" | "vines" | "ribbons" | "talisman" | "feathers" | "runes" | "charm";
+/** The butt/foot fitting at the base of the staff. */
+export type StaffFoot = "none" | "ferrule" | "cap" | "spike" | "orb" | "claw" | "sphere";
 export type TridentType = "trident" | "pitchfork";
 export type ShieldShape = "heater" | "kite" | "tower" | "round" | "crest" | "teardrop" | "lozenge" | "hexagon" | "scallop" | "oval";
 export type ShieldBlazon = "planked" | "marble" | "hammered" | "bone" | "scaled" | "leather" | "weave" | "verdigris" | "crystal" | "half-vertical" | "half-horizontal" | "half-diagonal" | "quarters" | "stripes-vertical" | "stripes-horizontal" | "stripes-diagonal" | "checker" | "diamonds";
 export type ShieldEmblem = "boss" | "gem" | "cross" | "star" | "chevron" | "crescent" | "bolt" | "sun" | "ring" | "diamond" | "studs" | "none";
-export type ShieldRim = "none" | "metal" | "gold" | "riveted" | "dark" | "banded";
+export type ShieldRim = "none" | "metal" | "gold" | "dark" | "banded" | "riveted" | "studded" | "corners" | "notched" | "rope" | "engraved" | "runic" | "spiked";
 /** Per-class part overrides, namespaced by {@link IconClass} so switching
  *  weapon type never loses a previous type's choices (they just go unused
  *  until you switch back). */

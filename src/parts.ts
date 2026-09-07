@@ -9,7 +9,7 @@ import type {
   BladeProfile, BladeGuard, BladePommel, BladeModification,
   AxeHead, AxeBack, AxeButt, AxeDecoration,
   SpearHead, SpearCollar, SpearButt, SpearDecoration,
-  StaffHead, StaffShaft, StaffBinding,
+  StaffHead, StaffShaft, StaffBinding, StaffFoot,
   TridentType,
   ShieldShape, ShieldBlazon, ShieldEmblem, ShieldRim,
 } from "./types";
@@ -130,7 +130,7 @@ export const SPEAR_HEAD_OPTIONS: PartOption<SpearHead>[] = [
 export const SPEAR_COLLAR_OPTIONS: PartOption<SpearCollar>[] = [
   { value: "none", label: "None" },
   { value: "ferrule", label: "Ferrule" },
-  { value: "banded", label: "Banded" },
+  { value: "sleeve", label: "Sleeve" },
   { value: "langets", label: "Langets" },
   { value: "gem", label: "Gem" },
   { value: "ring", label: "Ring" },
@@ -151,7 +151,7 @@ export const SPEAR_DECORATION_OPTIONS: PartOption<SpearDecoration>[] = [
   { value: "tassel", label: "Tassel" },
   { value: "wrap", label: "Shaft Wrap" },
   { value: "gem", label: "Gem" },
-  { value: "rings", label: "Rings" },
+  { value: "charm", label: "Charm" },
   { value: "feathers", label: "Feathers" },
 ];
 
@@ -173,7 +173,7 @@ export const STAFF_SHAFT_OPTIONS: PartOption<StaffShaft>[] = [
   { value: "straight", label: "Straight" },
   { value: "twisted", label: "Twisted" },
   { value: "wrapped", label: "Wrapped" },
-  { value: "segmented", label: "Segmented" },
+  { value: "spiral", label: "Spiral-Carved" },
   { value: "gnarled", label: "Gnarled" },
   { value: "bone", label: "Bone" },
   { value: "metal", label: "Metal" },
@@ -182,12 +182,24 @@ export const STAFF_SHAFT_OPTIONS: PartOption<StaffShaft>[] = [
 export const STAFF_BINDING_OPTIONS: PartOption<StaffBinding>[] = [
   { value: "none", label: "None" },
   { value: "collar", label: "Collar" },
-  { value: "doublecollar", label: "Double Collar" },
   { value: "wrap", label: "Cord Wrap" },
+  { value: "spiralcord", label: "Spiral Cord" },
   { value: "leaves", label: "Leaves" },
+  { value: "vines", label: "Vines" },
   { value: "ribbons", label: "Ribbons" },
+  { value: "talisman", label: "Talisman" },
+  { value: "feathers", label: "Feathers" },
+  { value: "runes", label: "Runes" },
   { value: "charm", label: "Hanging Charm" },
-  { value: "rings", label: "Rings" },
+];
+export const STAFF_FOOT_OPTIONS: PartOption<StaffFoot>[] = [
+  { value: "none", label: "None" },
+  { value: "ferrule", label: "Ferrule" },
+  { value: "cap", label: "Cap" },
+  { value: "spike", label: "Spike" },
+  { value: "orb", label: "Orb" },
+  { value: "claw", label: "Claw Foot" },
+  { value: "sphere", label: "Sphere" },
 ];
 
 export const TRIDENT_TYPE_OPTIONS: PartOption<TridentType>[] = [
@@ -245,7 +257,14 @@ export const SHIELD_RIM_OPTIONS: PartOption<ShieldRim>[] = [
   { value: "none", label: "None" },
   { value: "metal", label: "Metal" },
   { value: "gold", label: "Gold" },
-  { value: "riveted", label: "Riveted" },
   { value: "dark", label: "Dark Iron" },
   { value: "banded", label: "Banded" },
+  { value: "riveted", label: "Riveted" },
+  { value: "studded", label: "Studded" },
+  { value: "corners", label: "Corner Brackets" },
+  { value: "notched", label: "Notched" },
+  { value: "rope", label: "Rope" },
+  { value: "engraved", label: "Engraved" },
+  { value: "runic", label: "Runic" },
+  { value: "spiked", label: "Spiked" },
 ];

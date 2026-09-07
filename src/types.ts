@@ -67,6 +67,8 @@ export interface StaffParts {
   shaft?: StaffShaft;
   /** Fittings bound onto the shaft — collars, wraps, leaves, charms. */
   binding?: StaffBinding;
+  /** The butt/foot fitting at the base of the staff. */
+  foot?: StaffFoot;
 }
 export interface TridentParts {
   type?: TridentType;
@@ -115,19 +117,22 @@ export type SpearHead =
   | "harpoon" | "needle" | "partisan" | "forked" | "flame"
   | "crescent" | "crystal";
 export type SpearCollar =
-  | "none" | "ferrule" | "banded" | "langets" | "gem" | "ring" | "winged" | "spiked";
+  | "none" | "ferrule" | "sleeve" | "langets" | "gem" | "ring" | "winged" | "spiked";
 export type SpearButt = "none" | "cap" | "spike" | "ball" | "ring";
 export type SpearDecoration =
-  | "none" | "ribbons" | "pennant" | "tassel" | "wrap" | "gem" | "rings" | "feathers";
+  | "none" | "ribbons" | "pennant" | "tassel" | "wrap" | "gem" | "charm" | "feathers";
 
 export type StaffHead =
   | "orb" | "crystal" | "cluster" | "crescent" | "halo" | "claws"
   | "wings" | "loop" | "crook" | "twinhorns" | "star" | "branch";
 export type StaffShaft =
-  | "straight" | "twisted" | "wrapped" | "segmented"
+  | "straight" | "twisted" | "wrapped" | "spiral"
   | "gnarled" | "bone" | "metal" | "lacquer";
 export type StaffBinding =
-  | "none" | "collar" | "doublecollar" | "wrap" | "leaves" | "ribbons" | "charm" | "rings";
+  | "none" | "collar" | "wrap" | "spiralcord" | "leaves" | "vines"
+  | "ribbons" | "talisman" | "feathers" | "runes" | "charm";
+/** The butt/foot fitting at the base of the staff. */
+export type StaffFoot = "none" | "ferrule" | "cap" | "spike" | "orb" | "claw" | "sphere";
 
 export type TridentType = "trident" | "pitchfork";
 
@@ -144,7 +149,9 @@ export type ShieldBlazon =
 export type ShieldEmblem =
   | "boss" | "gem" | "cross" | "star" | "chevron" | "crescent"
   | "bolt" | "sun" | "ring" | "diamond" | "studs" | "none";
-export type ShieldRim = "none" | "metal" | "gold" | "riveted" | "dark" | "banded";
+export type ShieldRim =
+  | "none" | "metal" | "gold" | "dark" | "banded" | "riveted"
+  | "studded" | "corners" | "notched" | "rope" | "engraved" | "runic" | "spiked";
 
 /** Per-class part overrides, namespaced by {@link IconClass} so switching
  *  weapon type never loses a previous type's choices (they just go unused

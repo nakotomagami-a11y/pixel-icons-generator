@@ -5,7 +5,7 @@
  * `types.ts` because TypeScript union types vanish at runtime; a UI needs an
  * actual array to map over.
  */
-import type { BladeProfile, BladeGuard, BladePommel, BladeModification, AxeHead, AxeBack, AxeButt, AxeDecoration, SpearHead, SpearCollar, SpearButt, SpearDecoration, StaffHead, StaffShaft, StaffBinding, TridentType, ShieldShape, ShieldBlazon, ShieldEmblem, ShieldRim } from "./types";
+import type { BladeProfile, BladeGuard, BladePommel, BladeModification, AxeHead, AxeBack, AxeButt, AxeDecoration, SpearHead, SpearCollar, SpearButt, SpearDecoration, StaffHead, StaffShaft, StaffBinding, StaffFoot, TridentType, ShieldShape, ShieldBlazon, ShieldEmblem, ShieldRim } from "./types";
 export interface PartOption<T extends string> {
     value: T;
     label: string;
@@ -25,6 +25,7 @@ export declare const SPEAR_DECORATION_OPTIONS: PartOption<SpearDecoration>[];
 export declare const STAFF_HEAD_OPTIONS: PartOption<StaffHead>[];
 export declare const STAFF_SHAFT_OPTIONS: PartOption<StaffShaft>[];
 export declare const STAFF_BINDING_OPTIONS: PartOption<StaffBinding>[];
+export declare const STAFF_FOOT_OPTIONS: PartOption<StaffFoot>[];
 export declare const TRIDENT_TYPE_OPTIONS: PartOption<TridentType>[];
 export declare const SHIELD_SHAPE_OPTIONS: PartOption<ShieldShape>[];
 export declare const SHIELD_BLAZON_OPTIONS: PartOption<ShieldBlazon>[];
