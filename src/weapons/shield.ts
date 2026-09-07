@@ -76,7 +76,10 @@ const EMBLEMS: Emblem[] = [
   "boss", "boss", "gem", "cross", "cross", "star", "chevron",
   "crescent", "bolt", "sun", "ring", "diamond", "studs", "none",
 ];
-const RIMS: Rim[] = ["none", "none", "metal", "metal", "gold", "riveted", "dark", "banded"];
+const RIMS: Rim[] = [
+  "none", "none", "metal", "gold", "dark", "banded", "riveted",
+  "studded", "corners", "notched", "rope", "engraved", "runic", "spiked",
+];
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -658,32 +661,64 @@ export function drawShield(pen: Pen, parts?: ShieldParts): void {
   // -- rim: the frame layer between field and emblem -------------------------
   const rim: Rim = parts?.rim && RIMS.includes(parts.rim) ? parts.rim : pick(r, RIMS);
   if (rim !== "none") {
-    const rimRamp = rim === "gold" ? GOLD : rim === "dark" ? DARKIRON : rim === "riveted" ? STEEL : rim === "banded" ? BRONZE : STEEL;
+    const rimRamp =
+      rim === "gold" ? GOLD
+        : rim === "dark" || rim === "runic" ? DARKIRON
+          : rim === "banded" ? BRONZE
+            : rim === "studded" ? BRONZE
+              : STEEL;
     const rimW = Math.max(1.2, 1.4 * dscale);
-    for (let x = 0; x < B; x++) {
-      for (let y = 0; y < B; y++) {
-        const dx = x - cx;
-        const s = sample(shape, dx, y, m);
-        if (!s) continue;
-        const lt = clamp01(0.5 + 0.5 * (s.nx * lx + s.ny * ly));
-        if (s.edgeDist < rimW) {
-          pen.ctx.fillStyle = colorStr(colorLerp(rimRamp.shadow, rimRamp.light, lt));
-          pen.drawPixel(x, y);
-        } else if (rim === "banded" && Math.abs(s.edgeDist - rimW * 2.4) < rimW * 0.5) {
-          // A second inner band set in from the edge.
-          pen.ctx.fillStyle = colorStr(colorLerp(rimRamp.shadow, rimRamp.mid, lt));
+    const cyMid = top + H / 2;
+    // "studded" and "corners" carry no continuous band — just fittings.
+    const hasBand = rim !== "studded" && rim !== "corners";
+    // Even angular spacing around the perimeter drives the periodic rims
+    // (notch teeth / rope twist) so they read the same on any silhouette.
+    const teeth = 7; // → 14 alternating merlon segments
+    if (hasBand) {
+      for (let x = 0; x < B; x++) {
+        for (let y = 0; y < B; y++) {
+          const dx = x - cx;
+          const s = sample(shape, dx, y, m);
+          if (!s) continue;
+          const ed = s.edgeDist;
+          if (ed >= rimW) {
+            if (rim === "banded" && Math.abs(ed - rimW * 2.4) < rimW * 0.5) {
+              const lt = clamp01(0.5 + 0.5 * (s.nx * lx + s.ny * ly));
+              pen.ctx.fillStyle = colorStr(colorLerp(rimRamp.shadow, rimRamp.mid, lt));
+              pen.drawPixel(x, y);
+            }
+            continue;
+          }
+          const lt = clamp01(0.5 + 0.5 * (s.nx * lx + s.ny * ly));
+          const ang = Math.atan2(y - cyMid, dx);
+          if (rim === "notched") {
+            // Castellated: alternating segments have their outer half cut away.
+            const gap = (Math.floor((ang + Math.PI) / (Math.PI / teeth)) % 2 + 2) % 2 === 1;
+            if (gap && ed < rimW * 0.5) continue;
+          }
+          let col: Color;
+          if (rim === "rope") {
+            // A twisted cable: alternating light/dark beads marching the edge.
+            const ph = ((ang * teeth * 1.4 / Math.PI) % 1 + 1) % 1;
+            col = ph < 0.5 ? colorLerp(rimRamp.mid, rimRamp.light, lt) : rimRamp.shadow;
+          } else if (rim === "engraved") {
+            // A recessed groove line runs the middle of the band.
+            col = ed > rimW * 0.38 && ed < rimW * 0.66
+              ? colorDarken(rimRamp.shadow, 0.25)
+              : colorLerp(rimRamp.shadow, rimRamp.light, lt);
+          } else {
+            col = colorLerp(rimRamp.shadow, rimRamp.light, lt);
+          }
+          pen.ctx.fillStyle = colorStr(col);
           pen.drawPixel(x, y);
         }
       }
     }
-    if (rim === "riveted") {
-      // Rivet studs spaced around the edge: scan outward along a fan of
-      // directions from the centre to find the silhouette edge, inset a bit.
-      const cyMid = top + H / 2;
-      const nRivets = 8;
-      const a0 = r.rangeFloat(0, Math.PI / 4);
-      for (let i = 0; i < nRivets; i++) {
-        const a = a0 + (i / nRivets) * Math.PI * 2;
+
+    // Per-rim fittings, placed by scanning outward from the centre to the edge.
+    const scanStamp = (n: number, a0: number, fn: (px: number, py: number, edge: number, a: number) => void) => {
+      for (let i = 0; i < n; i++) {
+        const a = a0 + (i / n) * Math.PI * 2;
         const dirx = Math.cos(a);
         const diry = Math.sin(a);
         let edge = 0;
@@ -691,13 +726,61 @@ export function drawShield(pen: Pen, parts?: ShieldParts): void {
           if (!sample(shape, dirx * d, cyMid + diry * d, m)) { edge = d; break; }
         }
         if (edge < 4) continue;
-        const inset = edge - Math.max(2, 2.2 * dscale);
+        fn(cx + dirx * edge, cyMid + diry * edge, edge, a);
+      }
+    };
+
+    if (rim === "riveted" || rim === "studded") {
+      const studRamp = rim === "studded" ? BRONZE : STEEL;
+      const n = rim === "studded" ? 12 : 8;
+      const inset = Math.max(2, 2.2 * dscale);
+      scanStamp(n, r.rangeFloat(0, Math.PI / 4), (px, py, edge, a) => {
         pen.drawRoundOrnamentHelper({
-          center: new Vector(cx + dirx * inset, cyMid + diry * inset),
-          radius: Math.max(1, 0.9 * dscale),
-          colorLight: STEEL.light,
-          colorDark: STEEL.shadow,
+          center: new Vector(cx + Math.cos(a) * (edge - inset), cyMid + Math.sin(a) * (edge - inset)),
+          radius: Math.max(1, (rim === "studded" ? 1.05 : 0.9) * dscale),
+          colorLight: studRamp.light,
+          colorDark: studRamp.shadow,
         });
+      });
+    } else if (rim === "runic") {
+      // Glowing rune glyphs inset into the dark band at intervals.
+      const rune = pickCrystal(r);
+      scanStamp(9, r.rangeFloat(0, Math.PI / 4), (px, py, edge, a) => {
+        const bx = Math.round(cx + Math.cos(a) * (edge - Math.max(1.4, 1.6 * dscale)));
+        const by = Math.round(cyMid + Math.sin(a) * (edge - Math.max(1.4, 1.6 * dscale)));
+        if (!sample(shape, bx - cx, by, m)) return;
+        pen.ctx.fillStyle = colorStr(rune.light);
+        pen.drawPixel(bx, by);
+        pen.ctx.fillStyle = colorStr(rune.mid);
+        pen.drawPixel(bx, by - 1);
+      });
+    } else if (rim === "spiked") {
+      // Triangular spikes projecting outward around the rim.
+      scanStamp(11, r.rangeFloat(0, Math.PI / 5), (px, py, edge, a) => {
+        const dirx = Math.cos(a);
+        const diry = Math.sin(a);
+        const baseInset = Math.max(1.5, 1.6 * dscale);
+        pen.fillCone(
+          cx + dirx * (edge - baseInset), cyMid + diry * (edge - baseInset),
+          dirx, diry, 0, Math.max(3, 3.4 * dscale), Math.max(1.4, 1.6 * dscale),
+          STEEL.light, STEEL.shadow,
+        );
+      });
+    } else if (rim === "corners") {
+      // Reinforcement brackets at the top corners and the bottom point/foot.
+      for (const a of [-Math.PI * 0.72, -Math.PI * 0.28, Math.PI * 0.5]) {
+        const dirx = Math.cos(a);
+        const diry = Math.sin(a);
+        let edge = 0;
+        for (let d = 0; d < B; d += 1) {
+          if (!sample(shape, dirx * d, cyMid + diry * d, m)) { edge = d; break; }
+        }
+        if (edge < 4) continue;
+        const inset = Math.max(2.2, 2.6 * dscale);
+        const bcx = cx + dirx * (edge - inset);
+        const bcy = cyMid + diry * (edge - inset);
+        pen.drawRoundOrnamentHelper({ center: new Vector(bcx, bcy), radius: Math.max(1.6, 2 * dscale), colorLight: STEEL.light, colorDark: STEEL.shadow });
+        pen.drawRoundOrnamentHelper({ center: new Vector(bcx, bcy), radius: Math.max(0.6, 0.6 * dscale), colorLight: STEEL.shadow, colorDark: STEEL.shadow });
       }
     }
   }

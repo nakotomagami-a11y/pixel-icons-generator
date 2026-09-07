@@ -22,9 +22,12 @@ const HEAD_KEYS = [
     "leaf", "leaf", "pike", "broadleaf", "winged", "glaive", "glaive",
     "harpoon", "needle", "partisan", "forked", "flame", "crescent", "crystal",
 ];
-const COLLARS = ["none", "ferrule", "ferrule", "ferrule", "banded", "langets", "gem", "ring", "winged", "spiked"];
+const COLLARS = ["none", "ferrule", "ferrule", "ferrule", "sleeve", "langets", "gem", "ring", "winged", "spiked"];
 const BUTTS = ["none", "cap", "cap", "spike", "ball", "ring"];
-const DECORATIONS = ["none", "none", "none", "ribbons", "ribbons", "pennant", "tassel", "wrap", "wrap", "gem", "rings", "feathers"];
+const DECORATIONS = ["none", "none", "none", "ribbons", "ribbons", "pennant", "tassel", "wrap", "wrap", "gem", "charm", "feathers"];
+/** Legacy names from the previous generator, mapped so persisted configs don't break. */
+const LEGACY_COLLARS = { banded: "sleeve" };
+const LEGACY_DECORATIONS = { rings: "charm" };
 const pick = (r, arr) => arr[Math.floor(r.float() * arr.length) % arr.length];
 const rf = (r, lo, hi) => r.rangeFloat(lo, hi);
 const norm = (x, y) => { const m = Math.hypot(x, y) || 1; return { x: x / m, y: y / m }; };
@@ -49,9 +52,15 @@ export function drawSpear(pen, parts) {
     pen.clearCanvas();
     const headKey = parts?.head && parts.head in HEADS ? parts.head : pick(r, HEAD_KEYS);
     const cfg = HEADS[headKey];
-    const collar = parts?.collar && COLLARS.includes(parts.collar) ? parts.collar : pick(r, COLLARS);
+    const reqCollar = parts?.collar;
+    const collar = reqCollar && COLLARS.includes(reqCollar) ? reqCollar
+        : reqCollar && reqCollar in LEGACY_COLLARS ? LEGACY_COLLARS[reqCollar]
+            : pick(r, COLLARS);
     const butt = parts?.butt && BUTTS.includes(parts.butt) ? parts.butt : pick(r, BUTTS);
-    const deco = parts?.decoration && DECORATIONS.includes(parts.decoration) ? parts.decoration : pick(r, DECORATIONS);
+    const reqDeco = parts?.decoration;
+    const deco = reqDeco && DECORATIONS.includes(reqDeco) ? reqDeco
+        : reqDeco && reqDeco in LEGACY_DECORATIONS ? LEGACY_DECORATIONS[reqDeco]
+            : pick(r, DECORATIONS);
     const headLen = rf(r, cfg.len[0], cfg.len[1]) * dscale;
     const startRadius = Math.max(1, Math.ceil(rf(r, cfg.radius[0], cfg.radius[1]) * dscale));
     const tipStartDiag = canvasDiag - headLen;
@@ -163,12 +172,10 @@ export function drawSpear(pen, parts) {
     if (collar === "ferrule") {
         drawCollar(pen, bounds, u, n, base.x, base.y, haftR + 1.2 * dscale, Math.max(0.8, 0.8 * dscale), collarMetal.light, collarMetal.shadow);
     }
-    else if (collar === "banded") {
-        // Three tight thin bands stacked down from the socket.
-        for (let i = 0; i < 3; i++) {
-            const c = diagToPosition(tipStartDiag - (1.4 + i * 2.2) * dscale * Math.SQRT2 * 0.5, bounds);
-            drawCollar(pen, bounds, u, n, c.x, c.y, haftR + 0.8 * dscale, Math.max(0.6, 0.5 * dscale), collarMetal.light, collarMetal.shadow);
-        }
+    else if (collar === "sleeve") {
+        // A single deep metal sleeve gripping the socket — one solid fitting, a
+        // few px long down the shaft (not a stack of thin ring bands).
+        drawCollar(pen, bounds, u, n, base.x - u.x * 1.6 * dscale, base.y - u.y * 1.6 * dscale, haftR + 1.1 * dscale, Math.max(1.8, 2 * dscale), collarMetal.light, collarMetal.shadow);
     }
     else if (collar === "langets") {
         // Two thin metal reinforcing straps running down the shaft from the socket.
@@ -261,14 +268,27 @@ export function drawSpear(pen, parts) {
         const gc = new Vector(tipColors.startOrtho + u.x * 2 * dscale, pen.dimension - 1 - tipColors.startOrtho + u.y * 2 * dscale);
         pen.drawRoundOrnamentHelper({ center: gc, radius: Math.max(1, 1 * dscale), colorLight: gm.light, colorDark: gm.shadow });
     }
-    else if (deco === "rings") {
-        // 2–3 bright metal rings girdling the shaft's middle.
-        const nRing = r.float() < 0.5 ? 2 : 3;
-        for (let i = 0; i < nRing; i++) {
-            const diag = tipStartDiag * (0.35 + 0.18 * i);
-            const c = diagToPosition(diag, bounds);
-            drawCollar(pen, bounds, u, n, c.x, c.y, haftR + 0.9 * dscale, Math.max(0.7, 0.6 * dscale), collarMetal.light, collarMetal.shadow);
+    else if (deco === "charm") {
+        // A single gem-charm dangling on a short cord from the upper shaft.
+        const gm = pickGem(r);
+        const rootDiag = tipStartDiag - rf(r, 2, 4) * dscale;
+        const rp = diagToPosition(rootDiag, bounds);
+        const cordStr = colorStr(colorDarken(WOOD.shadow, 0.1));
+        const drop = 3.2 * dscale;
+        for (let l = 0; l <= drop; l += 0.5) {
+            const x = Math.round(rp.x + n.x * 0.35 * l - u.x * 0.9 * l);
+            const y = Math.round(rp.y + n.y * 0.35 * l - u.y * 0.9 * l);
+            if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h)
+                continue;
+            pen.ctx.fillStyle = cordStr;
+            pen.drawPixel(x, y);
         }
+        pen.drawRoundOrnamentHelper({
+            center: new Vector(rp.x + n.x * 0.35 * drop - u.x * 0.9 * drop, rp.y + n.y * 0.35 * drop - u.y * 0.9 * drop),
+            radius: Math.max(1, 1 * dscale),
+            colorLight: gm.light,
+            colorDark: gm.shadow,
+        });
     }
     else if (deco === "feathers") {
         // Paired fletching-feathers hanging off the socket: elongated soft cones

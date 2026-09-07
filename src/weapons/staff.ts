@@ -1,6 +1,6 @@
 import type { Pen } from "../pen";
 import type { Color } from "../types";
-import type { StaffHead as Head, StaffShaft as Shaft, StaffBinding, StaffParts } from "../types";
+import type { StaffHead as Head, StaffShaft as Shaft, StaffBinding, StaffFoot, StaffParts } from "../types";
 import { Vector, Bounds, diagToPosition } from "../math";
 import { colorDarken, colorLerp, colorLighten, colorStr } from "../color";
 import { Rng } from "../rng";
@@ -8,24 +8,36 @@ import { WOOD, DARK, BONE, BLUED, GOLD, STEEL, pickGem, pickCrystal, RIBBONS } f
 
 /**
  * Mix-and-match staff, layer by layer, rebuilt from the ground up: a SHAFT
- * (straight / twisted / wrapped / segmented / gnarled / bone / metal /
+ * (straight / twisted / wrapped / spiral-carved / gnarled / bone / metal /
  * lacquer) along the bottom-left→top-right diagonal, a magical HEAD topping
- * it (orb, crystal shard, cluster, crescent moon, halo, claws, wings, ankh
- * loop, shepherd's crook, twin horns, star, living branch), and a BINDING
- * bound onto the shaft (collars, cord wraps, leaves, ribbons, a hanging
- * charm…). Every layer is an independent pick so the dropdowns compose.
+ * it, a BINDING worked onto the shaft (a single clean collar, a cord/spiral
+ * wrap, climbing vines, hanging ribbons/feathers/talisman/charm, carved
+ * runes…) and a FOOT fitting at the base. Every layer is an independent pick
+ * so the dropdowns compose.
+ *
+ * NOTE: the old "segmented"/"rings"/"doublecollar" looks (stacks of metal
+ * bead-rings down the shaft) are gone — they read as pill sausages at 40-60px.
+ * A ferrule collar is only ever drawn as ONE clean beveled band now.
  */
 
 const pick = <T,>(r: Rng, arr: T[]): T => arr[Math.floor(r.float() * arr.length) % arr.length]!;
+
+const GREEN = { shadow: { r: 0x2f, g: 0x5a, b: 0x2e }, mid: { r: 0x4c, g: 0x87, b: 0x3a }, light: { r: 0x6f, g: 0xb0, b: 0x4a } } as const;
 
 const HEADS: Head[] = [
   "orb", "orb", "crystal", "cluster", "crescent", "halo", "claws", "claws",
   "wings", "loop", "crook", "twinhorns", "star", "branch",
 ];
-const SHAFTS: Shaft[] = ["straight", "straight", "twisted", "wrapped", "segmented", "gnarled", "bone", "metal", "lacquer"];
-const BINDINGS: StaffBinding[] = ["none", "none", "none", "collar", "collar", "doublecollar", "wrap", "leaves", "ribbons", "charm", "rings"];
-/** Legacy head names from the pre-rework generator. */
+const SHAFTS: Shaft[] = ["straight", "straight", "twisted", "wrapped", "spiral", "gnarled", "bone", "metal", "lacquer"];
+const BINDINGS: StaffBinding[] = [
+  "none", "none", "collar", "wrap", "spiralcord", "leaves", "vines",
+  "ribbons", "talisman", "feathers", "runes", "charm",
+];
+const FEET: StaffFoot[] = ["none", "ferrule", "ferrule", "cap", "spike", "orb", "claw", "sphere"];
+/** Legacy names from earlier generators, mapped so persisted configs don't break. */
 const LEGACY_HEADS: Record<string, Head> = { bare: "orb", collar: "orb" };
+const LEGACY_SHAFTS: Record<string, Shaft> = { segmented: "spiral" };
+const LEGACY_BINDINGS: Record<string, StaffBinding> = { doublecollar: "collar", rings: "wrap" };
 
 /** Heads that centre on a gem (get glow + sparkles). */
 const GEM_HEADS = new Set<Head>(["orb", "crystal", "cluster", "crescent", "halo", "claws", "wings", "star"]);
@@ -46,8 +58,21 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
       : requestedHead && requestedHead in LEGACY_HEADS
         ? LEGACY_HEADS[requestedHead]!
         : pick(r, HEADS);
-  const shaft: Shaft = parts?.shaft && SHAFTS.includes(parts.shaft) ? parts.shaft : pick(r, SHAFTS);
-  const binding: StaffBinding = parts?.binding && BINDINGS.includes(parts.binding) ? parts.binding : pick(r, BINDINGS);
+  const requestedShaft = parts?.shaft as string | undefined;
+  const shaft: Shaft =
+    requestedShaft && SHAFTS.includes(requestedShaft as Shaft)
+      ? (requestedShaft as Shaft)
+      : requestedShaft && requestedShaft in LEGACY_SHAFTS
+        ? LEGACY_SHAFTS[requestedShaft]!
+        : pick(r, SHAFTS);
+  const requestedBinding = parts?.binding as string | undefined;
+  const binding: StaffBinding =
+    requestedBinding && BINDINGS.includes(requestedBinding as StaffBinding)
+      ? (requestedBinding as StaffBinding)
+      : requestedBinding && requestedBinding in LEGACY_BINDINGS
+        ? LEGACY_BINDINGS[requestedBinding]!
+        : pick(r, BINDINGS);
+  const foot: StaffFoot = parts?.foot && FEET.includes(parts.foot) ? parts.foot : pick(r, FEET);
 
   const isWand = r.float() < 0.25;
   const gemRadius = (isWand ? r.rangeFloat(2.4, 3.4) : r.rangeFloat(3.6, 5.2)) * dscale;
@@ -84,22 +109,24 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
     twistShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, haftColor);
   } else if (shaft === "wrapped") {
     pen.drawGripHelper({ startDiag: haftTopDiag * r.rangeFloat(0.2, 0.4), lengthDiag: haftTopDiag * r.rangeFloat(0.18, 0.3), minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.7 * dscale, fractionalRadiusAllowed: true });
-  } else if (shaft === "segmented") {
-    // Bound grip framed by a metal ferrule at each end.
-    const gripStart = haftTopDiag * r.rangeFloat(0.26, 0.4);
-    const gripLen = haftTopDiag * r.rangeFloat(0.2, 0.32);
-    pen.drawGripHelper({ startDiag: gripStart, lengthDiag: gripLen, minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.6 * dscale, fractionalRadiusAllowed: true });
-    drawShaftRing(pen, bounds, gripStart, haftMaxRadius + 0.6 * dscale, dscale, metal, metalDark);
-    drawShaftRing(pen, bounds, gripStart + gripLen, haftMaxRadius + 0.6 * dscale, dscale, metal, metalDark);
+  } else if (shaft === "spiral") {
+    // Carved helical grooves running the shaft's length — a diagonal barber-
+    // pole of dark cut lines with a lit ridge on the top-left flank. Reads as
+    // a turned/carved wizard staff, NOT stacked rings.
+    spiralShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, haftColor);
   } else if (shaft === "gnarled") {
     gnarlShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, r);
   } else if (shaft === "bone") {
-    // Vertebral joints: paired darker rings spaced down the shaft.
-    const nJoint = 3;
-    for (let i = 0; i < nJoint; i++) {
-      const d = haftTopDiag * (0.25 + 0.22 * i);
-      drawShaftRing(pen, bounds, d, haftMaxRadius + 0.2 * dscale, dscale, BONE.light, BONE.shadow);
-      drawShaftRing(pen, bounds, d + 1.6 * dscale, haftMaxRadius + 0.1 * dscale, dscale, BONE.mid, BONE.shadow);
+    // A smooth pale bone shaft: a single lit ridge line down the top-left
+    // flank so it reads as rounded polished bone (no vertebral bead rings).
+    const litStr = colorStr(BONE.spec);
+    for (let l = 3 * dscale; l < haftTopDiag / Math.SQRT2 - 2; l += 1) {
+      const x = Math.round(l + n.x * haftMaxRadius * 0.45);
+      const y = Math.round(bounds.h - 1 - l + n.y * haftMaxRadius * 0.45);
+      if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
+      if (pen.ctx.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+      pen.ctx.fillStyle = litStr;
+      pen.drawPixel(x, y);
     }
   } else if (shaft === "metal") {
     // A bright specular line down the lit side of the shaft.
@@ -124,26 +151,31 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
       pen.ctx.fillStyle = litStr;
       pen.drawPixel(x, y);
     }
-    drawShaftRing(pen, bounds, haftTopDiag * 0.16, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
-    drawShaftRing(pen, bounds, haftTopDiag * 0.8, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
+    drawCollarBand(pen, bounds, haftTopDiag * 0.16, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
+    drawCollarBand(pen, bounds, haftTopDiag * 0.8, haftMaxRadius, dscale, GOLD.light, GOLD.shadow);
   }
 
-  // -- binding -----------------------------------------------------------------
+  // -- binding: worked onto the mid/upper shaft --------------------------------
   if (binding === "collar") {
-    drawShaftRing(pen, bounds, haftTopDiag * r.rangeFloat(0.55, 0.72), haftMaxRadius, dscale, metal, metalDark);
-  } else if (binding === "doublecollar") {
-    const d0 = haftTopDiag * r.rangeFloat(0.5, 0.62);
-    drawShaftRing(pen, bounds, d0, haftMaxRadius, dscale, metal, metalDark);
-    drawShaftRing(pen, bounds, d0 + 2.4 * dscale, haftMaxRadius, dscale, metal, metalDark);
+    // ONE clean beveled ferrule band near the neck. Never a stack.
+    drawCollarBand(pen, bounds, haftTopDiag * r.rangeFloat(0.55, 0.72), haftMaxRadius, dscale, metal, metalDark);
   } else if (binding === "wrap") {
-    pen.drawGripHelper({ startDiag: haftTopDiag * r.rangeFloat(0.3, 0.45), lengthDiag: haftTopDiag * r.rangeFloat(0.12, 0.2), minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.5 * dscale, fractionalRadiusAllowed: true });
+    // A cord-wrapped grip section.
+    pen.drawGripHelper({ startDiag: haftTopDiag * r.rangeFloat(0.28, 0.42), lengthDiag: haftTopDiag * r.rangeFloat(0.16, 0.26), minRadius: haftMaxRadius, maxRadius: haftMaxRadius + 0.5 * dscale, fractionalRadiusAllowed: true });
+  } else if (binding === "spiralcord") {
+    // A leather cord spiralling diagonally up a section of the shaft — reads
+    // as a bound grip, not stacked rings.
+    spiralCord(pen, bounds, haftTopDiag * 0.32, haftTopDiag * 0.34, haftMaxRadius, dscale);
   } else if (binding === "leaves") {
+    // A cluster of leaves sprouting just below the head.
     const leafBase = diagToPosition((gemOrtho - gemRadius * 1.3) * Math.SQRT2, bounds);
-    const green = { shadow: { r: 0x2f, g: 0x5a, b: 0x2e }, light: { r: 0x6f, g: 0xb0, b: 0x4a } } as const;
     for (const side of [-1, 1]) {
       const a = -Math.PI / 4 + side * 1.3;
-      pen.fillCone(leafBase.x, leafBase.y, Math.cos(a), Math.sin(a), 0, r.rangeFloat(3, 5) * dscale, Math.max(1.2, 1.3 * dscale), green.light, green.shadow);
+      pen.fillCone(leafBase.x, leafBase.y, Math.cos(a), Math.sin(a), 0, r.rangeFloat(3, 5) * dscale, Math.max(1.2, 1.3 * dscale), GREEN.light, GREEN.shadow);
     }
+  } else if (binding === "vines") {
+    // A thin vine winding up the shaft with little leaf pairs along it.
+    vineWrap(pen, bounds, haftTopDiag, haftMaxRadius, dscale, r);
   } else if (binding === "ribbons") {
     const cloth = pick(r, RIBBONS);
     const rootDiag = (gemOrtho - gemRadius * 0.9) * Math.SQRT2;
@@ -153,9 +185,25 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
       const m = Math.hypot(dir.x, dir.y);
       pen.drawRibbon(rp.x, rp.y, dir.x / m, dir.y / m, r.rangeFloat(5, 7) * dscale, Math.max(1.4, 1.4 * dscale), cloth, { wave: 1.6 * dscale, waveLen: 6 * dscale, taper: true, twist: true });
     }
+  } else if (binding === "talisman") {
+    // A flat rune-tablet hanging on a short cord below the head.
+    talisman(pen, bounds, gemOrtho, gemRadius, u, n, dscale, r, metal, metalDark);
+  } else if (binding === "feathers") {
+    // A pair of feathers bound at the neck, hanging back toward the grip.
+    const cloth = pick(r, RIBBONS);
+    const rootDiag = (gemOrtho - gemRadius * 0.85) * Math.SQRT2;
+    const rp = diagToPosition(rootDiag, bounds);
+    for (const side of [1, -1]) {
+      const dir = { x: -u.x * 0.7 + n.x * side * 0.9, y: -u.y * 0.7 + n.y * side * 0.9 };
+      const m = Math.hypot(dir.x, dir.y);
+      pen.fillCone(rp.x, rp.y, dir.x / m, dir.y / m, 1 * dscale, r.rangeFloat(4.5, 6) * dscale, Math.max(1.3, 1.2 * dscale), cloth.light, cloth.shadow);
+    }
+  } else if (binding === "runes") {
+    // Glowing rune glyphs carved down the shaft, in one crystal colour.
+    runeShaft(pen, bounds, haftTopDiag, haftMaxRadius, dscale, r);
   } else if (binding === "charm") {
     // A small gem dangling on a short cord below the head.
-    const g = pickGem(r);
+    const gch = pickGem(r);
     const rootDiag = (gemOrtho - gemRadius * 0.8) * Math.SQRT2;
     const rp = diagToPosition(rootDiag, bounds);
     const cordStr = colorStr(DARK.mid);
@@ -167,20 +215,13 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
     pen.drawRoundOrnamentHelper({
       center: new Vector(rp.x + n.x * 0.4 * drop - u.x * 0.9 * drop, rp.y + n.y * 0.4 * drop - u.y * 0.9 * drop),
       radius: Math.max(1, 1 * dscale),
-      colorLight: g.light,
-      colorDark: g.shadow,
+      colorLight: gch.light,
+      colorDark: gch.shadow,
     });
-  } else if (binding === "rings") {
-    for (let i = 0; i < 3; i++) {
-      drawShaftRing(pen, bounds, haftTopDiag * (0.3 + 0.18 * i), haftMaxRadius, dscale, metal, metalDark);
-    }
   }
 
-  // Base finial.
-  if (r.float() < 0.7) {
-    const baseR = haftMaxRadius + 0.4 * dscale;
-    pen.drawRoundOrnamentHelper({ center: new Vector(Math.floor(baseR) + 1, Math.ceil(bounds.h - baseR - 2)), radius: baseR, colorLight: metal, colorDark: metalDark });
-  }
+  // -- foot: the base fitting --------------------------------------------------
+  drawFoot(pen, bounds, foot, haftMaxRadius, dscale, u, metal, metalDark, r);
 
   // -- head --------------------------------------------------------------------
   const gemR = pickGem(r);
@@ -295,9 +336,10 @@ export function drawStaff(pen: Pen, parts?: StaffParts): void {
     drawOrb(pen, gemCenter.x, gemCenter.y, gemRadius * (head === "crescent" ? 0.85 : 1), gemDark, gemLight, gemCore, spec);
   }
 
-  // Collar ring at the shaft/gem join for gem-carrying settings.
-  if (GEM_HEADS.has(head) && head !== "cluster" && r.float() < 0.4) {
-    drawShaftRing(pen, bounds, (gemOrtho - gemRadius * 0.7) * Math.SQRT2, haftMaxRadius + 0.4 * dscale, dscale, metal, metalDark);
+  // A single clean ferrule where the head socket meets the shaft (only when
+  // the binding hasn't already dressed the neck).
+  if (GEM_HEADS.has(head) && head !== "cluster" && binding === "none" && r.float() < 0.45) {
+    drawCollarBand(pen, bounds, (gemOrtho - gemRadius * 0.7) * Math.SQRT2, haftMaxRadius + 0.4 * dscale, dscale, metal, metalDark);
   }
 
   // Settings drawn OVER the gem (claw tips read in front).
@@ -449,21 +491,176 @@ function drawFacet(pen: Pen, cx: number, cy: number, rad: number, dark: Color, l
   }
 }
 
-function drawShaftRing(pen: Pen, bounds: Bounds, diag: number, halfWidth: number, dscale: number, light: Color, dark: Color): void {
+/** ONE clean beveled ferrule collar across the shaft: a couple px deep along
+ *  the shaft, lit on the top-left half, a bright rim on the lit edge and a
+ *  dark seam on the shadow edge — reads as a machined metal band, not a pill.
+ *  Never call this in a stack. */
+function drawCollarBand(pen: Pen, bounds: Bounds, diag: number, halfWidth: number, dscale: number, light: Color, dark: Color): void {
   const ortho = diag / Math.SQRT2;
   const cx = ortho, cy = bounds.h - 1 - ortho;
-  const fwd = Math.SQRT1_2, perp = Math.SQRT1_2;
-  const halfW = halfWidth + 0.8 * dscale;
-  const halfT = Math.max(0.6, 0.7 * dscale);
-  const litStr = colorStr(light), darkStr = colorStr(dark);
+  const fwd = Math.SQRT1_2, perp = Math.SQRT1_2; // fwd = along shaft, perp = across
+  const halfW = halfWidth + 0.9 * dscale;
+  const halfT = Math.max(0.9, 1.1 * dscale);
+  const litStr = colorStr(light), darkStr = colorStr(dark), midStr = colorStr(colorLerp(dark, light, 0.55));
+  const specStr = colorStr(colorLighten(light, 0.3));
   for (let t = -halfW; t <= halfW; t += 0.5) {
-    for (let u = -halfT; u <= halfT; u += 0.5) {
-      const x = Math.round(cx + perp * t + fwd * u);
-      const y = Math.round(cy + perp * t - fwd * u);
+    for (let uu = -halfT; uu <= halfT; uu += 0.5) {
+      const x = Math.round(cx + perp * t + fwd * uu);
+      const y = Math.round(cy + perp * t - fwd * uu);
       if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
-      pen.ctx.fillStyle = t > halfW * 0.35 ? darkStr : litStr;
+      // Across-shaft shade (t: -lit .. +shadow) plus a bright rim on the
+      // top-left depth edge (uu<0).
+      const across = t / halfW;
+      let col = across < -0.35 ? litStr : across < 0.35 ? midStr : darkStr;
+      if (uu < -halfT * 0.55 && across < 0.2) col = specStr;
+      pen.ctx.fillStyle = col;
       pen.drawPixel(x, y);
     }
+  }
+}
+
+/** Carved helical grooves down the whole shaft: diagonal dark cut lines with
+ *  a lit ridge just above each — a turned wizard staff, not stacked rings. */
+function spiralShaft(pen: Pen, bounds: Bounds, topDiag: number, haftR: number, dscale: number, base: Color): void {
+  const darkStr = colorStr(colorDarken(base, 0.4));
+  const litStr = colorStr(colorLighten(base, 0.22));
+  const perpX = Math.SQRT1_2, perpY = Math.SQRT1_2;
+  const period = 3.2 * dscale;
+  const lMax = topDiag / Math.SQRT2 - 2;
+  for (let l = 3 * dscale; l < lMax; l += 0.5) {
+    for (let t = -haftR; t <= haftR; t += 0.5) {
+      const x = Math.round(l + perpX * t);
+      const y = Math.round(bounds.h - 1 - l + perpY * t);
+      if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
+      if (pen.ctx.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+      const phase = ((l - t * 1.6) % period + period) % period / period; // diagonal
+      if (phase < 0.24) pen.ctx.fillStyle = darkStr;
+      else if (phase < 0.4) pen.ctx.fillStyle = litStr;
+      else continue;
+      pen.drawPixel(x, y);
+    }
+  }
+}
+
+/** A cord spiralling up a SECTION of the shaft — a bound grip in leather. */
+function spiralCord(pen: Pen, bounds: Bounds, startDiag: number, lenDiag: number, haftR: number, dscale: number): void {
+  const darkStr = colorStr(colorDarken(DARK.mid, 0.15));
+  const litStr = colorStr(colorLighten(DARK.mid, 0.28));
+  const perpX = Math.SQRT1_2, perpY = Math.SQRT1_2;
+  const period = 2.8 * dscale;
+  const l0 = startDiag / Math.SQRT2;
+  const l1 = (startDiag + lenDiag) / Math.SQRT2;
+  for (let l = l0; l < l1; l += 0.5) {
+    for (let t = -haftR - 0.4 * dscale; t <= haftR + 0.4 * dscale; t += 0.5) {
+      const x = Math.round(l + perpX * t);
+      const y = Math.round(bounds.h - 1 - l + perpY * t);
+      if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
+      if (pen.ctx.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+      const phase = ((l - t * 1.3) % period + period) % period / period;
+      pen.ctx.fillStyle = phase < 0.5 ? litStr : darkStr; // bold cord bands
+      pen.drawPixel(x, y);
+    }
+  }
+}
+
+/** A thin vine winding up the shaft with small leaf pairs along it. */
+function vineWrap(pen: Pen, bounds: Bounds, topDiag: number, haftR: number, dscale: number, r: Rng): void {
+  const perpX = Math.SQRT1_2, perpY = Math.SQRT1_2;
+  const vineStr = colorStr(GREEN.mid);
+  const wave = 2.6 * dscale;
+  const lMax = topDiag / Math.SQRT2 - 3;
+  let nextLeaf = 4 * dscale;
+  for (let l = 4 * dscale; l < lMax; l += 0.5) {
+    const off = Math.sin(l / wave) * (haftR + 0.4 * dscale);
+    const x = Math.round(l + perpX * off);
+    const y = Math.round(bounds.h - 1 - l + perpY * off);
+    if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
+    pen.ctx.fillStyle = vineStr;
+    pen.drawPixel(x, y);
+    if (l >= nextLeaf) {
+      // A tiny leaf pair off the vine's current side.
+      const side = Math.cos(l / wave) > 0 ? 1 : -1;
+      const dir = { x: perpX * side, y: perpY * side };
+      pen.fillCone(x, y, dir.x, dir.y, 0, 2.2 * dscale, Math.max(1, 0.9 * dscale), GREEN.light, GREEN.shadow);
+      nextLeaf += r.rangeFloat(4, 6) * dscale;
+    }
+  }
+}
+
+/** A flat rune-tablet hanging on a short cord below the head. */
+function talisman(pen: Pen, bounds: Bounds, gemOrtho: number, gemRadius: number, u: Vector, n: Vector, dscale: number, r: Rng, light: Color, dark: Color): void {
+  const rootDiag = (gemOrtho - gemRadius * 0.8) * Math.SQRT2;
+  const rp = diagToPosition(rootDiag, bounds);
+  const cordStr = colorStr(DARK.mid);
+  const drop = 2.6 * dscale;
+  const cx = rp.x + n.x * 0.3 * drop - u.x * drop;
+  const cy = rp.y + n.y * 0.3 * drop - u.y * drop;
+  for (let l = 0; l <= drop; l += 0.5) {
+    pen.ctx.fillStyle = cordStr;
+    pen.drawPixel(Math.round(rp.x + (cx - rp.x) * (l / drop)), Math.round(rp.y + (cy - rp.y) * (l / drop)));
+  }
+  // The tablet: a small rounded rectangle, lit top-left.
+  const hw = 1.6 * dscale, hh = 2.2 * dscale;
+  const litStr = colorStr(light), midStr = colorStr(colorLerp(dark, light, 0.5)), dkStr = colorStr(dark);
+  for (let ox = -hw; ox <= hw; ox += 0.5) {
+    for (let oy = -hh; oy <= hh; oy += 0.5) {
+      if (Math.abs(ox) + Math.abs(oy) > hw + hh) continue;
+      const x = Math.round(cx + ox), y = Math.round(cy + oy + hh);
+      if (x < 0 || y < 0 || x >= bounds.w || y >= bounds.h) continue;
+      pen.ctx.fillStyle = ox + oy < -0.5 ? litStr : ox + oy < 1 ? midStr : dkStr;
+      pen.drawPixel(x, y);
+    }
+  }
+  // A rune mark stamped on it.
+  const rune = pickCrystal(r);
+  pen.ctx.fillStyle = colorStr(rune.light);
+  pen.drawPixel(Math.round(cx), Math.round(cy + hh));
+  pen.drawPixel(Math.round(cx), Math.round(cy + hh - 1));
+}
+
+/** Glowing rune glyphs carved down the shaft, in one crystal colour. */
+function runeShaft(pen: Pen, bounds: Bounds, topDiag: number, haftR: number, dscale: number, r: Rng): void {
+  const rune = pickCrystal(r);
+  const litStr = colorStr(rune.light), dimStr = colorStr(rune.mid);
+  const lMax = topDiag / Math.SQRT2 - 5;
+  let alt = false;
+  for (let l = 6 * dscale; l < lMax; l += Math.max(3, 3.4 * dscale)) {
+    const x = Math.round(l), y = Math.round(bounds.h - 1 - l);
+    if (x < 1 || y < 1 || x >= bounds.w - 1 || y >= bounds.h - 1) continue;
+    if (pen.ctx.getImageData(x, y, 1, 1).data[3]! === 0) continue;
+    pen.ctx.fillStyle = alt ? litStr : dimStr;
+    pen.drawPixel(x, y);
+    if (alt) { pen.drawPixel(x + 1, y); pen.drawPixel(x, y - 1); }
+    else { pen.drawPixel(x - 1, y); pen.drawPixel(x, y + 1); }
+    alt = !alt;
+    void haftR;
+  }
+}
+
+/** The base fitting at the foot of the staff (bottom-left corner). */
+function drawFoot(pen: Pen, bounds: Bounds, foot: StaffFoot, haftR: number, dscale: number, u: Vector, light: Color, dark: Color, r: Rng): void {
+  if (foot === "none") return;
+  const baseR = haftR + 0.4 * dscale;
+  const cap = new Vector(Math.floor(baseR) + 1, Math.ceil(bounds.h - baseR - 2));
+  if (foot === "ferrule") {
+    drawCollarBand(pen, bounds, 2.5 * dscale * Math.SQRT2, haftR, dscale, light, dark);
+  } else if (foot === "cap") {
+    pen.drawRoundOrnamentHelper({ center: cap, radius: baseR, colorLight: light, colorDark: dark });
+  } else if (foot === "spike") {
+    pen.fillCone(0, bounds.h - 1, -u.x, -u.y, 0, r.rangeFloat(3.5, 5) * dscale, Math.max(1, haftR * 0.95), light, dark);
+  } else if (foot === "orb") {
+    const g = pickGem(r);
+    pen.drawRoundOrnamentHelper({ center: cap, radius: baseR + 0.4 * dscale, colorLight: g.light, colorDark: g.shadow });
+  } else if (foot === "sphere") {
+    const rad = baseR + 0.9 * dscale;
+    pen.drawRoundOrnamentHelper({ center: new Vector(Math.floor(rad) + 1, Math.ceil(bounds.h - rad - 2)), radius: rad, colorLight: light, colorDark: dark });
+  } else if (foot === "claw") {
+    // A tripod of short prongs gripping outward from the base.
+    for (const a of [-0.5, 0.25, 1.0]) {
+      const dir = { x: -Math.cos(-Math.PI / 4 + a), y: -Math.sin(-Math.PI / 4 + a) };
+      pen.fillCone(cap.x, cap.y, dir.x, dir.y, 0, r.rangeFloat(2.6, 3.4) * dscale, Math.max(0.9, 0.9 * dscale), light, dark);
+    }
+    pen.drawRoundOrnamentHelper({ center: cap, radius: Math.max(1, baseR * 0.7), colorLight: light, colorDark: dark });
   }
 }
 
